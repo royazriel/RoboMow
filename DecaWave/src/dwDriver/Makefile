@@ -12,21 +12,17 @@ OBJ:=$(SRC:.c=.o)
 all: $(TARGET).a
 
 $(TARGET).a:$(OBJ)
-	@echo "archiving"
 	$(AR) rc $(TARGET).a $(OBJ)
 
 $(TARGET):$(OBJ)
-	@echo "linking"
 	$(CC) $(LDFLAGS) -o $@ $< 
 
-
 $(OBJ):$(SRC)
-	@echo "building objects"
-	@echo $(SRC)
 	$(CC) $(CFLAGS) -c $(SRC)
 
 clean:
 	rm -rf *.o
 	rm -rf $(TARGET) $(TARGET).a
+
 path:
 	@echo $(PATH)

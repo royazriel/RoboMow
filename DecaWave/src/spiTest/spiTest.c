@@ -103,7 +103,7 @@ static void print_usage(const char *prog)
 {
 	printf("Usage: %s [-DsbdlnHOLC3] [data,..]\n", prog);
 	puts("  -D --device   device to use (default /dev/spidev1.1)\n"
-	     "  -s --speed    max speed (Hz)\n"
+	     "  -s --speed    max speed (Hz)\n
 	     "  -d --delay    delay (usec)\n"
 	     "  -b --bpw      bits per word \n"
 	     "  -n --len      length\n"
@@ -289,7 +289,7 @@ int main(int argc, char *argv[])
 	if (ret == -1)
 		pabort("can't get max speed hz");
 
-	if (block_length > 0) {
+	if (chmo > 0) {
 		i = 0;
 		while (1) {
 			transfer(fd);

@@ -12,11 +12,8 @@ all: $(TARGET)
 
 
 $(TARGET):$(OBJ)
-	@echo "linking"
 	$(CC) $(LDFLAGS) -o $@ $< 
-
 $(OBJ):$(SRC)
-	@echo "building objects"
 	@echo $(SRC)
 	$(CC) $(CFLAGS) -c $<
 
@@ -25,3 +22,7 @@ clean:
 	rm -rf $(TARGET)
 path:
 	@echo $(PATH)
+
+mv2target:
+	scp $(TARGET) pi@192.168.1.30:/home/pi
+
