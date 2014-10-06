@@ -181,6 +181,15 @@ instance_data_t instance_data[NUM_INST] ;
 // -------------------------------------------------------------------------------------------------------------------
 // Functions
 // -------------------------------------------------------------------------------------------------------------------
+int GetTickCountInMiliSec()
+  {
+      struct timeval tv;
+      gettimeofday( &tv, NULL );
+
+      return (int)((tv.tv_sec * 1000.0) + ( tv.tv_usec / 1000.0));
+  }
+
+
 double convertdevicetimetosec8(uint8* dt)
 {
     double f = 0;
@@ -586,6 +595,7 @@ void xtalcalibration(void)
 int testapprun(instance_data_t *inst, int message)
 {
 
+	PINFO("inst->testAppState= %d",inst->testAppState);
     switch (inst->testAppState)
     {
         case TA_INIT :
@@ -638,6 +648,7 @@ int testapprun(instance_data_t *inst, int message)
                 break;
                 case ANCHOR:
                 {
+                	PINFO("inst->mode= %d",inst->mode);
 #if (DR_DISCOVERY == 0)
 					uint8 eui64[8] ;
                     memcpy(eui64, &inst->payload.anchorAddress, sizeof(uint64));
@@ -649,7 +660,6 @@ int testapprun(instance_data_t *inst, int message)
 					dwt_seteui(inst->eui64);
 #endif
                     dwt_setpanid(inst->panid);
-					
 					
 #if (USING_64BIT_ADDR==0)
                     {
@@ -681,7 +691,6 @@ int testapprun(instance_data_t *inst, int message)
 					dwt_setdblrxbuffmode(0); //enable double RX buffer 
 #endif
                     dwt_setrxtimeout(0);
-
                 }
                 break;
                 case LISTENER:
@@ -1926,7 +1935,7 @@ void instancesetaddresses(instanceAddressConfig_t *plconfig)
 
 void instance_close(void)
 {
-#if ST_MC
+#ifdef ST_MC
 #ifdef _MSC_VER
     uint8 buffer[1500];
     // close/tidy up any device functionality - i.e. wake it up if in sleep mode
@@ -2285,6 +2294,7 @@ int instance_run(void)
     int message = instance_data[instance].dwevent[0];
 
     {
+    	PINFO("0");
         while(done == INST_NOT_DONE_YET)
         {
             //int state = instance_data[instance].testAppState;
@@ -2309,33 +2319,34 @@ int instance_run(void)
         }
 
     }
-
+    PINFO("1");
     if(done == INST_DONE_WAIT_FOR_NEXT_EVENT_TO) //we are in RX and need to timeout (Tag needs to send another poll if no Rx frame)
     {
         if(instance_data[instance].mode == TAG) //Tag (is either in RX or sleeping)
         {
-			instance_data[instance].instancetimer = portGetTickCount() + instance_data[instance].tagSleepTime_ms; //start timer
+			instance_data[instance].instancetimer = GetTickCountInMiliSec() + instance_data[instance].tagSleepTime_ms; //start timer
             instance_data[instance].instancetimer_en = 1;
             //printf("sleep timer on %d\n", instance_data[instance].testAppState);
         }
 		if(instance_data[instance].mode == TAG_TDOA)
 		{
-			instance_data[instance].instancetimer = portGetTickCount() + instance_data[instance].tagBlinkSleepTime_ms; //start timer
+			instance_data[instance].instancetimer = GetTickCountInMiliSec() + instance_data[instance].tagBlinkSleepTime_ms; //start timer
 			instance_data[instance].instancetimer_en = 1;
 		}
         if(instance_data[instance].mode == ANCHOR) //Anchor (to timeout Anchor after sending of the ToF report )
         {
-            instance_data[instance].instancetimer = portGetTickCount() + instance_data[instance].anchReportTimeout_ms; //start timer
+        	PINFO("2 time %d", GetTickCountInMiliSec());
+            instance_data[instance].instancetimer = GetTickCountInMiliSec() + instance_data[instance].anchReportTimeout_ms; //start timer
             instance_data[instance].instancetimer_en = 1;
             //printf("report timer on %d\n", instance_data[instance].testAppState);
         }
         instance_data[instance].stoptimer = 0 ;
         instance_data[instance].done = INST_NOT_DONE_YET;
     }
-
+    PINFO("3");
     if((instance_data[instance].instancetimer_en == 1) && (instance_data[instance].stoptimer == 0))
     {
-        if(instance_data[instance].instancetimer < portGetTickCount())
+        if(instance_data[instance].instancetimer < GetTickCountInMiliSec())
         {
             instance_data[instance].instancetimer_en = 0;
             instance_data[instance].dwevent[instance_data[instance].dweventCnt++] = DWT_SIG_RX_TIMEOUT;

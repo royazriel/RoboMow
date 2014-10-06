@@ -170,9 +170,31 @@ int instance_mode = ANCHOR;
 uint32 inittestapplication( int mode, int replyDelayState, int blinkDelayState );
 
 
+void reset_DW1000(void)
+{
+#ifdef ST_MC
+	GPIO_InitTypeDef GPIO_InitStructure;
+
+	// Enable GPIO used for DW1000 reset
+	GPIO_InitStructure.GPIO_Pin = DW1000_RSTn;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(DW1000_RSTn_GPIO, &GPIO_InitStructure);
+
+	//drive the RSTn pin low
+	GPIO_ResetBits(DW1000_RSTn_GPIO, DW1000_RSTn);
+
+	//put the pin back to tri-state ... as input
+	GPIO_InitStructure.GPIO_Pin = DW1000_RSTn;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_Init(DW1000_RSTn_GPIO, &GPIO_InitStructure);
+#endif
+}
+
+
 int decarangingmode(void)
 {
-
 	int mode = 0;  //ch2 110kb/s
 
 #ifdef ST_MC
@@ -200,10 +222,11 @@ void restartinstance(void)
 	openspi( &s_spi );
     instance_close() ;                          //shut down instance, PHY, SPI close, etc.
 
-    inittestapplication(instance_mode, 0, 0 ) ;                     //re-initialise instance/device
+    inittestapplication(instance_mode, 1, 1 ) ;                     //re-initialise instance/device
 } // end restartinstance()
 
 //TODO check if supported
+#ifdef ST_MC
 void process_deca_irq(void)
 {
     do{
@@ -212,6 +235,35 @@ void process_deca_irq(void)
 
     }while(port_CheckIRQ() == 1); //while IRS line active (ARM can only do edge sensitive interrupts)
 
+}
+#endif
+
+void pabort(const char *s)
+{
+	perror(s);
+	abort();
+}
+
+void hexDump( const uint8 * buf, uint32 length )
+{
+   char format[MAX_PATH];
+   unsigned int i = 0;
+   int size = length;
+   int indexSize = 0;
+   int rawLength = SCREEN_RAW_LENGTH;
+   while ( size > 0 ) {
+       indexSize++;
+       size = size / 10;
+   }
+   sprintf( format, " [%%0%dd]:0x%%02x", indexSize );
+   rawLength = rawLength/strlen( format );
+   for ( ; i < length; i++ ) {
+       printf( format, i, buf[i] );
+       if ( ( ( i + 1 ) % rawLength ) == 0 ) {
+           printf( "\n");
+       }
+   }
+   printf( "\n" );
 }
 
 int main(int argc, char *argv[])
@@ -223,17 +275,17 @@ int main(int argc, char *argv[])
 	SpiConfig spi;
 
 	s_spi.bits = 8;
-	s_spi.speed = 500000;
+	s_spi.speed = 4500000;
 	s_spi.delay = 0;
-	s_spi.mode = SPI_CS_HIGH | SPI_CPOL | SPI_CPHA;
-	s_spi.toggle_cs = 0;
+	s_spi.mode = 0;
+	s_spi.toggle_cs = 1;
 	s_spi.device = "/dev/spidev0.0";
 
 	openspi( &s_spi );
 
 	PINFO( "spi initialized");
 
-    if(inittestapplication(instance_mode, 0, 0) == (uint32)-1)
+    if(inittestapplication(instance_mode, 1, 1) == (uint32)-1)
 	    {
 	        PERROR("init failed");
 	        return 0; //error
@@ -307,11 +359,13 @@ uint32 inittestapplication( int mode, int replyDelayState, int blinkDelayState )
     devID = instancereaddeviceid() ;
     if(DWT_DEVICE_ID != devID) //if the read of devide ID fails, the DW1000 could be asleep
     {
+    	PERROR("dev id problem");
+#ifdef ST_MC
     	port_SPIx_clear_chip_select();	//CS low
     	Sleep(1);	//200 us to wake up then waits 5ms for DW1000 XTAL to stabilise
     	port_SPIx_set_chip_select();  //CS high
     	Sleep(7);
-    	devID = instancereaddeviceid() ;
+#endif-    	devID = instancereaddeviceid() ;
         // SPI not working or Unsupported Device ID
     	if(DWT_DEVICE_ID != devID)
     		return(-1) ;
@@ -331,9 +385,11 @@ uint32 inittestapplication( int mode, int replyDelayState, int blinkDelayState )
 
     if (DWT_DEVICE_ID != devID)   // Means it is NOT MP device
     {
-        // SPI not working or Unsupported Device ID
+        PERROR("dev id problem");
 		return(-1) ;
     }
+
+    PINFO("DEVID = 0x%x", devID);
 
 	if(mode == 0)
 	{

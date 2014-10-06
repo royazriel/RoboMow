@@ -12,6 +12,7 @@
 #include "deca_param_types.h"
 #include "deca_device_api.h"
 #include "deca_regs.h"
+#include "../spiDriver/spiDriver.h"
 
 
 // Defines for enable_clocks function
@@ -551,8 +552,8 @@ uint16 dwt_readantennadelay(uint8 prf)
  *                         standard PHR mode allows up to 127 bytes
  *                         if > 127 is programmed, DWT_PHRMODE_EXT needs to be set in the phrMode configuration
  *                         see dwt_configure function
- * @param txFrameBytes   - Pointer to the user’s buffer containing the data to send.
- * @param txBufferOffset - This specifies an offset in the DW1000’s TX Buffer at which to start writing data.
+ * @param txFrameBytes   - Pointer to the userï¿½s buffer containing the data to send.
+ * @param txBufferOffset - This specifies an offset in the DW1000ï¿½s TX Buffer at which to start writing data.
  *
  * output parameters
  *
@@ -912,7 +913,6 @@ int dwt_readfromdevice
     int   cnt = 0;                                          // counter for length of header
 
     if (recordNumber > 0x3F) return DWT_ERROR ;                    // record number is limited to 6-bits.
-
     // Write message header selecting READ operation and addresses as appropriate (this is one to three bytes long)
 
     if (index == 0)                                         // for index of 0, no sub-index is required
