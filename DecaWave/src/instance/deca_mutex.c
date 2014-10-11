@@ -10,7 +10,7 @@
 //
 // -------------------------------------------------------------------------------------------------------------------
 
-#include "deca_device_api.h"
+#include "../dwDriver/deca_device_api.h"
 
 // ---------------------------------------------------------------------------
 //
@@ -64,3 +64,4 @@ decaIrqStatus_t decamutexon(void)
 void decamutexoff(decaIrqStatus_t s)        // put a function here that re-enables the interrupt at the end of the critical section
 {
 }
+

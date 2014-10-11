@@ -18,8 +18,25 @@
 #include "deca_device_api.h"
 #include "compiler.h"
 #include "spiDriver.h"
+#include "instance_sws.h"
 
 #include "instance.h"
+
+
+//Anchor address list
+uint64 anchorAddressList[ANCHOR_LIST_SIZE] =
+{
+     0xDECA020000000001 ,       // First anchor
+     0xDECA020000000002 ,       // Second anchor
+     0xDECA020000000003 ,       // Third anchor
+     0xDECA020000000004         // Fourth anchor
+} ;
+
+//ToF Report Forwarding Address
+uint64 forwardingAddress[1] =
+{
+	 0xDECA030000000001
+} ;
 
 typedef struct
 {
@@ -116,81 +133,49 @@ chConfig_t chConfig[8] ={
 						0		// non-standard SFD
 					}
 };
-
-#if (DR_DISCOVERY == 0)
-//Tag address list
-uint64 tagAddressList[3] =
+typedef struct
 {
-	 0xDECA010000001001,         // First tag
-     0xDECA010000000002,         // Second tag
-     0xDECA010000000003          // Third tag
-} ;
+    uint64 address ;                                    // contains this own address
+    char userString[MAX_USER_PAYLOAD_STRING+2] ;        // user supplied payload string
+    int counterAppend ;
+	int anchorListSize ;
+	int anchorPollMask ;
+	int tagSleepDuration ;
+	int tagBlinkSleepDuration ;
+    int anchorSendReports ;
+	int responseDelay ;
+} plConfig_t ;
 
-//Anchor address list
-uint64 anchorAddressList[ANCHOR_LIST_SIZE] =
-{
-     0xDECA020000000001 ,       // First anchor
-     0xDECA020000000002 ,       // Second anchor
-     0xDECA020000000003 ,       // Third anchor
-     0xDECA020000000004         // Fourth anchor
-} ;
-
-//ToF Report Forwarding Address
-uint64 forwardingAddress[1] =
-{
-	 0xDECA030000000001
-} ;
-// ======================================================
-//
-//  Configure instance tag/anchor/etc... addresses
-//
-void addressconfigure(void)
-{
-    instanceAddressConfig_t ipc ;
-
-    ipc.forwardToFRAddress = forwardingAddress[0];
-    ipc.anchorAddress = anchorAddressList[instance_anchaddr];
-    ipc.anchorAddressList = anchorAddressList;
-    ipc.anchorListSize = ANCHOR_LIST_SIZE ;
-    ipc.anchorPollMask = 0x1; //0x7;              // anchor poll mask
-
-    ipc.sendReport = 1 ;  //1 => anchor sends TOF report to tag
-    //ipc.sendReport = 2 ;  //2 => anchor sends TOF report to listener
-
-    instancesetaddresses(&ipc);
-}
-#endif
+plConfig_t payloadConfig = { 0xDECA000011223300,         // packetAddress 64 bit extended address
+                            "",							 // payload string - probably will initialise to empty string
+                            0,							 // flag - include ASCII a counter in the payload
+							ANCHOR_LIST_SIZE,			 // anchor list size
+							1,							 // anchor poll mask (bit mask: 1 = poll Anchor ID 1, 3 = poll both Anchors ID 1 and ID 2)
+							400,						 // tag sleep time
+							1000,						 // tag blink sleep time
+                            SEND_TOF_REPORT,			 // anchor sends reports by default (to tag that it ranged to)
+							FIXED_REPLY_DELAY	} ;		 // default response delay time
 
 
+plConfig_t tempPayloadConfig ;              // a copy for temp update in dialog
 static SpiConfig s_spi;
 int instance_anchaddr = 0;
 int dr_mode = 0;
 int instance_mode = ANCHOR;
+int viewClockOffset = 0 ;
+double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
+double antennaDelay16 ;                         // holds antenna delay at 16 MHz PRF
+double antennaDelay64 ;                         // holds antenna delay at 64 MHz PRF
+int initComplete = 0 ;                          // Wait for initialisation before polling status register
 
-uint32 inittestapplication( int mode, int replyDelayState, int blinkDelayState );
-
-
-void reset_DW1000(void)
-{
-#ifdef ST_MC
-	GPIO_InitTypeDef GPIO_InitStructure;
-
-	// Enable GPIO used for DW1000 reset
-	GPIO_InitStructure.GPIO_Pin = DW1000_RSTn;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(DW1000_RSTn_GPIO, &GPIO_InitStructure);
-
-	//drive the RSTn pin low
-	GPIO_ResetBits(DW1000_RSTn_GPIO, DW1000_RSTn);
-
-	//put the pin back to tri-state ... as input
-	GPIO_InitStructure.GPIO_Pin = DW1000_RSTn;
-	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
-	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
-	GPIO_Init(DW1000_RSTn_GPIO, &GPIO_InitStructure);
+#if (DECA_SUPPORT_SOUNDING==1 && DECA_KEEP_ACCUMULATOR==1)
+	static accBuff_t buffers[1];
+#else
+accBuff_t *buffers; //don't need this when DECA_SUPPORT_SOUNDING is off
 #endif
-}
+
+uint32 inittestapplication( int mode );
+
 
 
 int decarangingmode(void)
@@ -218,25 +203,13 @@ int decarangingmode(void)
 // Restart and re-configure
 void restartinstance(void)
 {
-	closespi();
-	openspi( &s_spi );
-    instance_close() ;                          //shut down instance, PHY, SPI close, etc.
 
-    inittestapplication(instance_mode, 1, 1 ) ;                     //re-initialise instance/device
+    instance_close() ;                          //shut down instance, PHY, SPI close, etc.
+    openspi( &s_spi );
+
+    inittestapplication( 1 ) ;                     //re-initialise instance/device
 } // end restartinstance()
 
-//TODO check if supported
-#ifdef ST_MC
-void process_deca_irq(void)
-{
-    do{
-
-    	instance_process_irq(0);
-
-    }while(port_CheckIRQ() == 1); //while IRS line active (ARM can only do edge sensitive interrupts)
-
-}
-#endif
 
 void pabort(const char *s)
 {
@@ -266,143 +239,139 @@ void hexDump( const uint8 * buf, uint32 length )
    printf( "\n" );
 }
 
+uint32 getmstime()
+{
+  struct timeval tv;
+  gettimeofday( &tv, NULL );
+
+  return (uint32)((tv.tv_sec * 1000) + ( tv.tv_usec / 1000));
+}
+
 int main(int argc, char *argv[])
 {
-	int i = 0;
 	uint32 status = 0;
 	uint32 states = 0;
-
-	SpiConfig spi;
+	uint32 time_ms;
 
 	s_spi.bits = 8;
 	s_spi.speed = 4500000;
 	s_spi.delay = 0;
 	s_spi.mode = 0;
-	s_spi.toggle_cs = 1;
+	s_spi.toggle_cs = 0;
 	s_spi.device = "/dev/spidev0.0";
 
 	openspi( &s_spi );
 
 	PINFO( "spi initialized");
 
-    if(inittestapplication(instance_mode, 1, 1) == (uint32)-1)
-	    {
-	        PERROR("init failed");
-	        return 0; //error
-	    }
+    if(inittestapplication( 1 ) == (uint32)-1)
+	{
+		PERROR("init failed");
+		return 0; //error
+	}
 
-		sleep(5);
-		i = 0;
-
-
-		if(instance_mode == TAG)
-		{
-			PINFO( "AWAITING RESPONSE");
-		}
-		else
-		{
-			PINFO( "AWAITING POLL");
-		}
-#ifdef ST_MC
-		port_EnableIRQ(); //enable ScenSor IRQ before starting
-#endif
-    // main loop
-    while(1)
+    while( 1 )
     {
-    	//DEBUG
-#if 1
-    	if(i==1)
-		{
-			states = 0;
-			uint32 addr = 0;
-			uint32 offset = 0;
-			uint32 value = 0;
-
-			status = dwt_read32bitoffsetreg(0xF, 0x0);
-			states = dwt_read32bitoffsetreg(0x19, 0x0);
-
-			states = dwt_read32bitoffsetreg(0x19, 0x1);
-
-			dwt_write32bitoffsetreg(addr, offset, value);
-		}
+    	 if (initComplete)   // if application is not paused (and initialsiation completed)
+    	 {
+    		 time_ms = getmstime();
+			//system_services();
+			instance_run( time_ms );
+#if 0
+			if( getInstanceData(0)->tagListLen > 0 && instance_mode == LISTENER )
+			{
+				PINFO("TAG FOUND changing role to anchor - restarting");
+				instance_mode = ANCHOR;
+				initComplete = 0;
+				restartinstance();
+			}
 #endif
-
-		//system_services();
-		instance_run();
-
-		if(instancenewrange())
-		{
-			//send the new range information to Location Engine
-			double range_result = 0;
-			double avg_result = 0;
-
-			range_result = instance_get_idist();
-			avg_result = instance_get_adist();
-
-			PINFO("LAST: %4.2f m AVG8: %4.2f m", range_result, avg_result);
-		}
+    	 }
     }
 }
 
-
-uint32 inittestapplication( int mode, int replyDelayState, int blinkDelayState )
+// ======================================================
+//
+//  Configure payload in instance
+//
+void payloadconfigure(void)
 {
-    uint32 devID ;
-    instanceConfig_t instConfig;
-    int i , result;
-#ifdef ST_MC
-    SPI_ConfigFastRate(SPI_BaudRatePrescaler_16);  //max SPI before PLLs configured is ~4M
-#endif
-    i = 10;
+    instancePayloadConfig_t ipc ;
+	int max_user_payload_string = MAX_USER_PAYLOAD_STRING;
+
+	ipc.forwardToFRAddress = forwardingAddress[0];
+	ipc.anchorAddress = anchorAddressList[instance_anchaddr];
+	ipc.anchorAddressList = anchorAddressList;
+	ipc.anchorListSize = payloadConfig.anchorListSize ;
+	ipc.anchorPollMask = payloadConfig.anchorPollMask ;
+
+	ipc.sendReport = payloadConfig.anchorSendReports ;  //1 => SEND_TOF_REPORT anchor sends TOF report to tag
+
+    ipc.countAppend = payloadConfig.counterAppend ;
+
+	if(payloadConfig.counterAppend)
+		ipc.payloadLen = 8;
+	else
+		ipc.payloadLen = 0;
+
+    //strncpy_s(ipc.payloadString,sizeof(ipc.payloadString),payloadConfig.userString,(max_user_payload_string-ipc.payloadLen)) ;
+	ipc.payloadLen += strlen(ipc.payloadString);
+
+    instancesetpayloadandaddresses(&ipc) ;
+}
+
+uint32 inittestapplication( int reset )
+{
+	instanceConfig_t instConfig ;
+	uint32 devID ;
+	uint8 buffer[1500];
+	int result ;
 
 	//this is called here to wake up the device (i.e. if it was in sleep mode before the restart)
     devID = instancereaddeviceid() ;
-    if(DWT_DEVICE_ID != devID) //if the read of devide ID fails, the DW1000 could be asleep
-    {
-    	PERROR("dev id problem");
-#ifdef ST_MC
-    	port_SPIx_clear_chip_select();	//CS low
-    	Sleep(1);	//200 us to wake up then waits 5ms for DW1000 XTAL to stabilise
-    	port_SPIx_set_chip_select();  //CS high
-    	Sleep(7);
-#endif-    	devID = instancereaddeviceid() ;
-        // SPI not working or Unsupported Device ID
-    	if(DWT_DEVICE_ID != devID)
-    		return(-1) ;
-    	//clear the sleep bit - so that after the hard reset below the DW does not go into sleep
-    	dwt_softreset();
-    }
+	if(DWT_DEVICE_ID != devID)
+	{
+		dwt_spicswakeup(buffer, 1500);
+	}
+	devID = instancereaddeviceid() ;
 
-	//reset the DW1000 by driving the RSTn line low
-	reset_DW1000();
-
-    result = instance_init() ;
-    if (0 > result) return(-1) ; // Some failure has occurred
-#ifdef ST_MC
-    SPI_ConfigFastRate(SPI_BaudRatePrescaler_4); //increase SPI to max
-#endif
-    devID = instancereaddeviceid() ;
-
-    if (DWT_DEVICE_ID != devID)   // Means it is NOT MP device
+    if ((devID & 0xFFFF0000) != 0xDECA0000)
     {
         PERROR("dev id problem");
-		return(-1) ;
+    		return(-1) ;
     }
 
     PINFO("DEVID = 0x%x", devID);
 
-	if(mode == 0)
+    result = instance_init(buffers) ;       // reset, done as part of init
+
+	if (result != DWT_SUCCESS)
 	{
-		instance_mode = TAG;
-		PINFO( "MODE = TAG");
+	   PINFO("ERROR in initialising device", "DecaWave Application");
+	   exit(-1) ;
+	}
+
+   instancesetrole(instance_mode) ;                                                // Set this instance role
+
+	if(instance_mode == LISTENER) instcleartaglist();
+
+
+	if(instance_mode == ANCHOR)
+	{
+
 	}
 	else
 	{
-		instance_mode = ANCHOR;
-		PINFO( "MODE = ANCHOR");
+
 	}
 
-    instancesetrole(instance_mode) ;     // Set this instance role
+	if(instance_mode != TAG)
+	{
+
+	}
+	else
+	{
+	}
 
     dr_mode = decarangingmode();
 
@@ -417,25 +386,39 @@ uint32 inittestapplication( int mode, int replyDelayState, int blinkDelayState )
 
     instance_config(&instConfig) ;                  // Set operating channel etc
 
-#if (DR_DISCOVERY == 0)
-    addressconfigure() ;                            // set up initial payload configuration
-#endif
-    instancesettagsleepdelay(400); //set the Tag sleep time
+    if (initComplete == 0)
+  	{
+  	    antennaDelay16 = instancegetantennadelay(DWT_PRF_16M);          // MP Antenna Delay at 16MHz PRF (read from OTP calibration data)
+          antennaDelay64 = instancegetantennadelay(DWT_PRF_64M);          // MP Antenna Delay at 64MHz PRF (read from OTP calibration data)
+          if (antennaDelay16 == 0) antennaDelay16 = DWT_PRF_16M_RFDLY;    // Set a value locally if not programmed in OTP cal data
+          if (antennaDelay64 == 0) antennaDelay64 = DWT_PRF_64M_RFDLY;    // Set a value locally if not programmed in OTP cal data
+  	}
 
-    if( replyDelayState == 0 )
-    {
-    	instancesetreplydelay(FIXED_REPLY_DELAY);
-    	PINFO( "REPLY DELAY = FIXED");
-    }
-    else
-    {
-    	instancesetreplydelay(FIXED_LONG_REPLY_DELAY);
-    	PINFO( "REPLY DELAY = LONG");
-    }
-    //use this to set the long blink response delay (e.g. when ranging with a PC anchor that wants to use the long response times)
-    if(blinkDelayState == 1 )
-    	instancesetblinkreplydelay(FIXED_LONG_BLINK_RESPONSE_DELAY);
+	if (instConfig.pulseRepFreq == DWT_PRF_64M)
+	{
+	  antennaDelay = antennaDelay64 ;
+	}
+	else
+	{
+	  antennaDelay = antennaDelay16 ;
+	}
 
-    return devID;
+	//PINFO("antena delay=%0.3f",antennaDelay);
+	instancesetantennadelays(antennaDelay) ;
+
+	payloadconfigure() ;                            // set up initial payload configuration
+
+	instancesettagsleepdelay(payloadConfig.tagSleepDuration, payloadConfig.tagBlinkSleepDuration) ;
+
+	instancesetblinkreplydelay(payloadConfig.responseDelay);
+	instancesetreplydelay(payloadConfig.responseDelay, 0) ;
+
+	instancesetreporting(payloadConfig.anchorSendReports) ;     // Set whether anchor instance sends reports
+
+	PINFO( "%s",instance_mode == 0 ? "LISTENER": instance_mode == 1 ? "TAG": "ANCHOR");
+
+	initComplete = 1 ;
+
+	return devID;
 }
 

@@ -11,7 +11,7 @@ CC = $(CROSS_COMPILE)gcc
 LD = $(CROSS_COMPILE)ld
 CFLAGS += -g -Wall -I/opt/rpi/tools/arm-bcm2708/gcc-linaro-arm-linux-gnueabihf-raspbian/arm-linux-gnueabihf/libc/usr/include 
 CFLAGS += -I$(SPI_DRIVER_PATH) -I$(DW_DRIVER_PATH)
-LDFLAGS = -L$(SPI_DRIVER_PATH) -lSpiDriver  -L$(DW_DRIVER_PATH) -lDw1000 
+LDFLAGS = -L$(SPI_DRIVER_PATH) -lSpiDriver  -L$(DW_DRIVER_PATH) -lDw1000  -lm
 SRC:=$(shell ls *.c)
 OBJ:=$(SRC:.c=.o)
 
