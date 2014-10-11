@@ -161,6 +161,7 @@ plConfig_t tempPayloadConfig ;              // a copy for temp update in dialog
 static SpiConfig s_spi;
 int instance_anchaddr = 0;
 int dr_mode = 0;
+int poll_delay = 0;
 int instance_mode = ANCHOR;
 int viewClockOffset = 0 ;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
@@ -247,6 +248,53 @@ uint32 getmstime()
   return (uint32)((tv.tv_sec * 1000) + ( tv.tv_usec / 1000));
 }
 
+static void print_usage(const char *prog)
+{
+	printf("Usage: %s [-drc] [data,..]\n", prog);
+	puts("  -d --device   device to use (default /dev/spidev1.1)\n"
+	     "  -r --role     0 = LISTENER 1 = TAG 2 = ANCHOR\n"
+	     "  -c --channel  channel selection 0-7 like on evkDW1000\n"
+		 "  -p --poll     poll delay in milisec\n"
+	);
+	exit(1);
+}
+
+static void parse_opts(int argc, char *argv[])
+{
+	while (1) {
+		static const struct option lopts[] = {
+			{ "device"	, 1, 0, 'd' },
+			{ "role"	, 1, 0, 'r' },
+			{ "channel"	, 1, 0, 'c' },
+			{ "poll"	, 1, 0, 'p' },
+			{ NULL		, 0, 0, 0 	},
+		};
+		int c;
+
+		c = getopt_long(argc, argv, "d:r:c:p:", lopts, NULL);
+
+		if (c == -1)
+			break;
+
+		switch (c) {
+		case 'd':
+			s_spi.device = optarg;
+			break;
+		case 'r':
+			instance_mode = (int)strtol(optarg, NULL, 0);
+			break;
+		case 'c':
+			dr_mode = (int)strtol(optarg, NULL, 0);
+			break;
+		case 'p':
+			poll_delay = (int)strtol(optarg, NULL, 0);
+			break;
+		default:
+			print_usage(argv[0]);
+			break;
+		}
+	}
+}
 int main(int argc, char *argv[])
 {
 	uint32 status = 0;
@@ -259,6 +307,8 @@ int main(int argc, char *argv[])
 	s_spi.mode = 0;
 	s_spi.toggle_cs = 0;
 	s_spi.device = "/dev/spidev0.0";
+
+	parse_opts(argc, argv);
 
 	openspi( &s_spi );
 
@@ -277,15 +327,7 @@ int main(int argc, char *argv[])
     		 time_ms = getmstime();
 			//system_services();
 			instance_run( time_ms );
-#if 0
-			if( getInstanceData(0)->tagListLen > 0 && instance_mode == LISTENER )
-			{
-				PINFO("TAG FOUND changing role to anchor - restarting");
-				instance_mode = ANCHOR;
-				initComplete = 0;
-				restartinstance();
-			}
-#endif
+			usleep( poll_delay * 1000);
     	 }
     }
 }
@@ -347,11 +389,12 @@ uint32 inittestapplication( int reset )
 
 	if (result != DWT_SUCCESS)
 	{
-	   PINFO("ERROR in initialising device", "DecaWave Application");
+	   PINFO("ERROR in initializing device", "DecaWave Application");
 	   exit(-1) ;
 	}
 
-   instancesetrole(instance_mode) ;                                                // Set this instance role
+	PINFO( "%s",instance_mode == 0 ? "LISTENER": instance_mode == 1 ? "TAG": "ANCHOR");
+	instancesetrole(instance_mode) ;                                                // Set this instance role
 
 	if(instance_mode == LISTENER) instcleartaglist();
 
@@ -373,16 +416,17 @@ uint32 inittestapplication( int reset )
 	{
 	}
 
-    dr_mode = decarangingmode();
-
     instConfig.channelNumber = chConfig[dr_mode].channel ;
     instConfig.preambleCode = chConfig[dr_mode].preambleCode ;
     instConfig.pulseRepFreq = chConfig[dr_mode].prf ;
     instConfig.pacSize = chConfig[dr_mode].pacSize ;
     instConfig.nsSFD = chConfig[dr_mode].nsSFD ;
-
     instConfig.dataRate = chConfig[dr_mode].datarate ;
     instConfig.preambleLen = chConfig[dr_mode].preambleLength ;
+
+    PINFO("ch selection: %d ch=%d preamble=%d prf=%d pacSize=%d nsSFD=%d datarate=%d preambleLength=%d",
+    		dr_mode, instConfig.channelNumber, instConfig.preambleCode, instConfig.pulseRepFreq,
+			instConfig.pacSize, instConfig.nsSFD, instConfig.dataRate, instConfig.preambleLen);
 
     instance_config(&instConfig) ;                  // Set operating channel etc
 
@@ -414,8 +458,6 @@ uint32 inittestapplication( int reset )
 	instancesetreplydelay(payloadConfig.responseDelay, 0) ;
 
 	instancesetreporting(payloadConfig.anchorSendReports) ;     // Set whether anchor instance sends reports
-
-	PINFO( "%s",instance_mode == 0 ? "LISTENER": instance_mode == 1 ? "TAG": "ANCHOR");
 
 	initComplete = 1 ;
 
