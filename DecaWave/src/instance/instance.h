@@ -123,9 +123,14 @@ typedef enum inst_states
     TA_SLEEP_DONE,              //9
     TA_TXBLINK_WAIT_SEND,       //10
     TA_TXRANGINGINIT_WAIT_SEND,  //11
-	TA_PAUSED
+	TA_PAUSED,
+	TA_LAST_STATE
 } INST_STATES;
 
+typedef struct _StateString {
+	uint8 state;
+	uint8 name[30];
+}StateString;
 
 // This file defines data and functions for access to Parameters in the Device
 //message structure for Poll, Response and Final message
@@ -397,6 +402,7 @@ typedef struct
     INST_STATES testAppState ;			//state machine - current state
     INST_STATES nextState ;				//state machine - next state
     INST_STATES previousState ;			//state machine - previous state
+    INST_STATES prevStateDebug;
     int done ;					//done with the current event/wait for next event to arrive
     
 	int pauseRequest ;			//user has paused the application 

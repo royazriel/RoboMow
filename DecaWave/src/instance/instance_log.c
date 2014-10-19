@@ -181,7 +181,7 @@ void reportTOF(instance_data_t *inst)
         if(inst->tofindex == RTD_MED_SZ) inst->tofindex = 0;
 		if(inst->tofstdevindex == RTD_STDEV_SZ) inst->tofstdevindex = 0;
 
-        PCLS;
+        //PCLS;
         PINFO("Instant: ToF: %-3.3f ns Dist: %-3.3f m ",tof*1e9, distance);
 
 		if (inst->dispClkOffset)                         // display clock offset

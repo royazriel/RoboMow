@@ -19,7 +19,8 @@
 
 
 //uint32 ptime = 0;
-
+extern uint32 getmstime();
+extern uint32 startTime;
 // -------------------------------------------------------------------------------------------------------------------
 //      Data Definitions
 // -------------------------------------------------------------------------------------------------------------------
@@ -221,6 +222,7 @@ int instance_init(accBuff_t *buf)
 
     instance_data[instance].mode = ANCHOR ;                                // assume listener,
     instance_data[instance].testAppState = TA_INIT ;
+    instance_data[instance].prevStateDebug = TA_LAST_STATE;
 
     instance_data[instance].anchorListIndex = 0 ;
     instance_data[instance].instToSleep = 0;
@@ -1031,6 +1033,7 @@ int instance_run(uint32 time)
 			{
 				while(dwt_checkIRQ()) // check if IRQS bit is active and process any new events
 				{
+					PINFO("dwt_isr received time %u",getmstime()-startTime);
 					dwt_isr() ;  
 				}
 

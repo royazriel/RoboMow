@@ -459,7 +459,7 @@ uint32 inittestapplication( int reset )
 
 	instancesetreporting(payloadConfig.anchorSendReports) ;     // Set whether anchor instance sends reports
 
-	initComplete = 1 ;
+	initComplete = 1;
 
 	return devID;
 }

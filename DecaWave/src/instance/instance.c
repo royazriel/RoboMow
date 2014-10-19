@@ -56,6 +56,37 @@
 instance_data_t instance_data[NUM_INST] ;
 extern uint32 getmstime();
 extern uint32 startTime;
+
+StateString statesTable[TA_LAST_STATE] =
+{
+	{	TA_INIT,                     "TA_INIT	                  " },
+	{	TA_TXE_WAIT,                 "TA_TXE_WAIT                 " },
+	{	TA_TXPOLL_WAIT_SEND,         "TA_TXPOLL_WAIT_SEND         " },
+	{	TA_TXFINAL_WAIT_SEND,        "TA_TXFINAL_WAIT_SEND        " },
+	{	TA_TXRESPONSE_WAIT_SEND,     "TA_TXRESPONSE_WAIT_SEND     " },
+	{	TA_TXREPORT_WAIT_SEND,       "TA_TXREPORT_WAIT_SEND       " },
+	{	TA_TX_WAIT_CONF,             "TA_TX_WAIT_CONF             " },
+	{	TA_RXE_WAIT,                 "TA_RXE_WAIT                 " },
+	{	TA_RX_WAIT_DATA,             "TA_RX_WAIT_DATA             " },
+	{	TA_SLEEP_DONE,               "TA_SLEEP_DONE               " },
+	{	TA_TXBLINK_WAIT_SEND,        "TA_TXBLINK_WAIT_SEND        " },
+	{	TA_TXRANGINGINIT_WAIT_SEND,  "TA_TXRANGINGINIT_WAIT_SEND  " },
+	{	TA_PAUSED,                   "TA_PAUSED                   " },
+	{	TA_LAST_STATE,                "TA_LAST_STATE               " }
+};
+
+uint8* GetStateName( uint8 stateIndex )
+{
+	int i;
+	for( i=0; i< TA_LAST_STATE; i++)
+	{
+		if(stateIndex == statesTable[i].state)
+		{
+			break;
+		}
+	}
+	return statesTable[i].name;
+}
 // -------------------------------------------------------------------------------------------------------------------
 // Functions
 // -------------------------------------------------------------------------------------------------------------------
@@ -234,6 +265,12 @@ int instancesendpacket(instance_data_t *inst, int delayedTx)
 int testapprun(instance_data_t *inst, int message, uint32 time_ms)
 {
 	//printf("\n\n inst-> testAppState=%d  -> mode=%d  message=%d time_ms %u\n\n",inst->testAppState,inst->mode, message, getmstime()-startTime);
+	if( inst->testAppState != inst->prevStateDebug )
+	{
+		PINFO("testAppState: %s message %d time %u",GetStateName(inst->testAppState), message, getmstime()-startTime );
+		inst->prevStateDebug =  inst->testAppState;
+	}
+
     switch (inst->testAppState)
     {
         case TA_INIT :
@@ -1023,7 +1060,7 @@ int testapprun(instance_data_t *inst, int message, uint32 time_ms)
 
 				case SIG_RX_BLINKDW : 
 				{
-					event_data_t dw_event = instance_getevent(); //get and clear this event
+					//event_data_t dw_event = instance_getevent(); //get and clear this event
 #if (DECA_ACCUM_LOG_SUPPORT==1)
 					instancelogrxblinkdata(inst, &dw_event);
 #endif
@@ -1132,6 +1169,9 @@ int testapprun(instance_data_t *inst, int message, uint32 time_ms)
 						//non - discovery mode - association is not used, process all messages
 						fcode = fn_code;
 #endif
+
+						//PINFO("fcode %d period %u",fcode,getmstime()-lastReport);
+						//lastReport = getmstime();
                         switch(fcode)
                         {
 							case RTLS_DEMO_MSG_RNG_INIT:
@@ -1591,8 +1631,8 @@ void instancesetreplydelay(int delayms, int datalength) //delay in ms
 	//this it the delay used for configuring the receiver on delay (wait for response delay), 
 	instance_data[instance].fixedReplyDelay_sy = (int) (delayms * 1000 / 1.0256) - 16 - (int)((preamblelen + (msgdatalen/1000.0))/ 1.0256); //subtract 16 symbols, as receiver has a 16 symbol start up time
 	}
-	printf("preamble %4.3fus, Final msg %4.3fus\n", preamblelen, msgdatalen/1000);
-	printf("Set response delay time to %d ms, %d sym b %d sym payload %d\n", (int) delayms, instance_data[instance].fixedReplyDelay_sy, instance_data[instance].rnginitW4Rdelay_sy, instance_data[instance].payload.payloadLen);
+	PINFO("preamble %4.3fus, Final msg %4.3fus\n", preamblelen, msgdatalen/1000);
+	PINFO("Set response delay time to %d ms, %d sym b %d sym payload %d\n", (int) delayms, instance_data[instance].fixedReplyDelay_sy, instance_data[instance].rnginitW4Rdelay_sy, instance_data[instance].payload.payloadLen);
 }
 
 // -------------------------------------------------------------------------------------------------------------------
