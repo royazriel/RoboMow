@@ -1,14 +1,16 @@
-// -------------------------------------------------------------------------------------------------------------------
-//
-//  File: deca_version.h - defines the version info for the DW1000 device driver including its API
-//
-//  Copyright 2013 (c) DecaWave Ltd, Dublin, Ireland.
-//
-//  All rights reserved.
-//
-//  Author: Billy Verso, Aug 2013.
-//
-// -------------------------------------------------------------------------------------------------------------------
+/****************************************************************************//**
+ *  @file 	deca_version.h
+ *  @brief	Defines the version info for the DW1000 device driver including its API
+ *
+ *	@attention
+ *  Copyright 2013 (c) DecaWave Ltd, Dublin, Ireland.
+ *
+ *  All rights reserved.
+ *
+ *  @author Billy Verso, Aug 2013.
+ *
+ ********************************************************************************
+**/
 
 #ifndef _DECA_VERSION_H_
 #define _DECA_VERSION_H_
@@ -26,7 +28,7 @@
 // Quantity AA is updated for major changes that will need user code changes
 //
 
-#define DW1000_DRIVER_VERSION               0x020500
-#define DW1000_DEVICE_DRIVER_VER_STRING     "DW1000 Device Driver Version 02.05.00"
+#define DW1000_DRIVER_VERSION               0x020900
+#define DW1000_DEVICE_DRIVER_VER_STRING     "DW1000 Device Driver Version 02.09.00"
 
 #endif

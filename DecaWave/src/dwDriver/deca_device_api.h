@@ -1,12 +1,17 @@
-/*! ------------------------------------------------------------------------------------------------------------------
- * FILE: deca_device_api.h - API Functions
+/****************************************************************************//**
+ * @file 	deca_device_api.h
+ * @brief	DW1000 API Functions
+ *
+ * @attention
  *
  * Copyright 2012 (c) DecaWave Ltd, Dublin, Ireland.
  *
  * All rights reserved.
  *
- * Author(s): Billy Verso / Zoran Skrba
- */
+ * @author(s): Billy Verso / Zoran Skrba
+ *
+ ********************************************************************************
+**/
 
 #ifndef _DECA_DEVICE_API_H_
 #define _DECA_DEVICE_API_H_
@@ -59,14 +64,19 @@ typedef signed long int32;
 #endif
 
 #define REG_DUMP (0) //set to 1 to enable register dump functions
+#if (REG_DUMP == 1)
+#include "string.h"
+#endif
 
-#define DWT_SUCCESS (0)
-#define DWT_ERROR   (-1)
+typedef enum {
+	DWT_SUCCESS = 0,
+	DWT_ERROR =  -1
+}eDWT;
 
-#define DWT_TIME_UNITS          (1.0/499.2e6/128.0) //= 15.65e-12 s
 
+#define DWT_TIME_UNITS          (1.0/499.2e6/128.0) //!< = 15.65e-12 s
 
-#define DWT_DEVICE_ID   (0xDECA0130) 		//DW1000 MP device ID
+#define DWT_DEVICE_ID   (0xDECA0130) 		//!< DW1000 MP device ID
 
 //! constants for selecting the bit rate for data TX (and RX)
 //! These are defined for write (with just a shift) the TX_FCTRL register
@@ -132,6 +142,7 @@ typedef signed long int32;
 
 //DW1000 interrupt events
 #define DWT_INT_TFRS			0x00000080			// frame sent
+#define DWT_INT_LDED            0x00000400			// micro-code has finished execution
 #define DWT_INT_RFCG			0x00004000			// frame received with good CRC
 #define DWT_INT_RPHE			0x00001000			// receiver PHY header error
 #define DWT_INT_RFCE			0x00008000			// receiver CRC error
@@ -166,8 +177,20 @@ typedef struct{
 	uint8 event;
     uint8 aatset;
 	uint16 datalength;
+	uint8  fctrl[2];		//frame control bytes
+	uint8 dblbuff ;
 
 }dwt_callback_data_t;
+
+typedef enum {
+	 CHAN_CTRL_TXCHAN_1 = 0x01,	/* Selects the transmit channel 1 */
+	 CHAN_CTRL_TXCHAN_2 = 0x02,	/* Selects the transmit channel 2 */
+	 CHAN_CTRL_TXCHAN_3 = 0x03,	/* Selects the transmit channel 3 */
+	 CHAN_CTRL_TXCHAN_4 = 0x04,	/* Selects the transmit channel 4 */
+	 CHAN_CTRL_TXCHAN_5 = 0x05,	/* Selects the transmit channel 5 */
+	 CHAN_CTRL_TXCHAN_7 = 0x07	/* Selects the transmit channel 7 */
+}eCHAN;
+
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * Structure typedef: dwt_config_t
@@ -178,7 +201,7 @@ typedef struct{
 
 typedef struct
 {
-	uint8	chan ;          //!< channel number {1, 2, 3, 4, 5, 7 }
+	eCHAN	chan ;          //!< channel number {1, 2, 3, 4, 5, 7 }
 	uint8	prf ;           //!< Pulse Repetition Frequency {DWT_PRF_16M or DWT_PRF_64M}
 
 	uint8 txPreambLength;	//!< DWT_PLEN_64..DWT_PLEN_4096
@@ -532,6 +555,19 @@ void dwt_readtxtimestamp(uint8 * timestamp);
 uint32 dwt_readtxtimestamphi32(void);
 
 /*! ------------------------------------------------------------------------------------------------------------------
+ * Function: dwt_readtxtimestamplo32()
+ *
+ *  Description: This is used to read the low 32-bits of the TX timestamp (adjusted with the programmed antenna delay)
+ *
+ * input parameters
+ *
+ * output parameters
+ *
+ * returns low 32-bits of TX timestamp
+ */
+uint32 dwt_readtxtimestamplo32(void);
+
+/*! ------------------------------------------------------------------------------------------------------------------
  * Function: dwt_readrxtimestamp()
  *
  *  Description: This is used to read the RX timestamp (adjusted time of arrival)
@@ -558,6 +594,19 @@ void dwt_readrxtimestamp(uint8 * timestamp);
  * returns high 32-bits of RX timestamp
  */
 uint32 dwt_readrxtimestamphi32(void);
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * Function: dwt_readrxtimestamplo32()
+ *
+ *  Description: This is used to read the low 32-bits of the RX timestamp (adjusted with the programmed antenna delay)
+ *
+ * input parameters
+ *
+ * output parameters
+ *
+ * returns low 32-bits of RX timestamp
+ */
+uint32 dwt_readrxtimestamplo32(void);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * Function: dwt_readsystimestamphi32()
@@ -587,6 +636,18 @@ uint32 dwt_readsystimestamphi32(void);
  */
 void dwt_readsystime(uint8 * timestamp);
 
+/*! ------------------------------------------------------------------------------------------------------------------
+ * Function: dwt_checkoverrun()
+ *
+ *  Description: This is used to check if the overrun condition is set in DW1000
+ *
+ * input parameters
+ *
+ * output parameters
+ *
+ * no return value
+ */
+int dwt_checkoverrun(void);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * Function: dwt_forcetrxoff()
@@ -764,8 +825,8 @@ uint16 dwt_calibratesleepcnt(void);
  * NOTE: e.g. MP :- Tag operation - after deep sleep, the device needs to just load the TX buffer and send the frame
  *
  *
- *		mode: the array and LDE code (NV RAM) and LDO tune, and set sleep persist 
- *		DWT_LOADUCODE    0x800 - load ucode from NVMEM
+ *		mode: the array and LDE code (OTP/ROM) and LDO tune, and set sleep persist 
+ *		DWT_LOADUCODE    0x800 - load ucode from OTP
  *		DWT_PRESRV_SLEEP 0x100 - preserve sleep
  *		DWT_LOADOPSET    0x080 - load operating parameter set on wakeup
  *		DWT_CONFIG       0x040 - download the AON array into the HIF (configuration download)
@@ -856,6 +917,18 @@ int dwt_spicswakeup(uint8 *buff, uint16 length);
  */
 void dwt_setcallbacks(void (*txcallback)(const dwt_callback_data_t *), void (*rxcallback)(const dwt_callback_data_t *));
 
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @fn dwt_checkIRQ()
+ *
+ *  @brief This function checks if the IRQ line is active - this is used instead of interrupt handler
+ *
+ * input parameters
+ *
+ * output parameters
+ *
+ * return value is 1 if the IRQS bit is set and 0 otherwise
+ */
+uint8 dwt_checkIRQ(void);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * Function: dwt_isr()
@@ -1016,6 +1089,18 @@ void dwt_enableautoack(uint8 responseDelayTime);
  */
 void dwt_setrxaftertxdelay(uint32 rxDelayTime);
 
+/*! ------------------------------------------------------------------------------------------------------------------
+ * Function: dwt_rxreset()
+ *
+ *  Description: this function resets the receiver of DW1000
+ *
+ * input parameters:	
+ *
+ * output parameters
+ *
+ * no return value
+ */
+void dwt_rxreset(void);
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * Function: dwt_softreset()
@@ -1094,7 +1179,7 @@ void dwt_readdignostics(dwt_rxdiag_t * diagnostics);
  *
  * no return value
  */
-int dwt_loadopsettabfromotp(uint8 gtab_sel);
+void  dwt_loadopsettabfromotp(uint8 gtab_sel);
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
@@ -1207,7 +1292,6 @@ void dwt_configcontinuousframemode(uint32 framerepetitionrate);
  *
  *  Description: this function reads the battery voltage and temperature of the MP
  *  The values read here will be the current values sampled by DW1000 AtoD converters.
- *	Note: SPI must be up to 3MHz
  *	Note on Temperature: the temperature value needs to be converted to give the real temperature
  *  the formula is: 1.13 * reading - 113.0
  *	Note on Voltage: the voltage value needs to be converted to give the real voltage
@@ -1379,7 +1463,7 @@ uint16 dwt_read16bitoffsetreg(int regFileID, int regOffset);
  */
 int dwt_write16bitoffsetreg(int regFileID, int regOffset, uint16 regval) ;
 
-#define dwt_write32bitreg(x, y)	dwt_write32bitoffsetreg(x,0,y)
+#define dwt_write32bitreg(x,y)	dwt_write32bitoffsetreg(x,0,y)
 #define dwt_read32bitreg(x)		dwt_read32bitoffsetreg(x,0)
 
 
@@ -1405,7 +1489,7 @@ int dwt_write16bitoffsetreg(int regFileID, int regOffset, uint16 regval) ;
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
-int writetospi                          // returns 0 for success, or, -1 for error.
+extern int writetospi                          // returns 0 for success, or, -1 for error.
 (
     uint16       headerLength,          // input parameter - number of bytes header being written
     const uint8 *headerBuffer,          // input parameter - pointer to buffer containing the 'headerLength' bytes of header to be written
@@ -1436,7 +1520,7 @@ int writetospi                          // returns 0 for success, or, -1 for err
  *
  * returns DWT_DECA_SUCCESS for success (and the position in the buffer at which data begins), or DWT_DECA_ERROR for error
  */
-int readfromspi                         // returns offset where requested data begins in supplied buffer, or, -1 for error.
+extern int readfromspi                         // returns offset where requested data begins in supplied buffer, or, -1 for error.
 (
     uint16       headerLength,          // input parameter - number of bytes header to write
     const uint8 *headerBuffer,          // input parameter - pointer to buffer containing the 'headerLength' bytes of header to write

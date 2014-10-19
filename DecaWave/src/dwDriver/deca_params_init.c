@@ -1,17 +1,20 @@
-// -------------------------------------------------------------------------------------------------------------------
-//
-//  File: deca_params_init.c - ScenSor configuration parameters
-//
-//  Copyright 2011 (c) DecaWave Ltd, Dublin, Ireland.
-//
-//  All rights reserved.
-//
-//  Author: Zoran/Rob Brady, Sept 2011
-//
-// -------------------------------------------------------------------------------------------------------------------
+/*! -------------------------------------------------------------------------------------------------------------------
+ *
+ *  @file deca_params_init.c
+ *  @brief ScenSor configuration parameters
+ *
+ *  Copyright 2011 (c) DecaWave Ltd, Dublin, Ireland.
+ *
+ *  All rights reserved.
+ *
+ *  @author Zoran/Rob Brady, Sept 2011
+ *
+ * -------------------------------------------------------------------------------------------------------------------
+**/
 #include <stdio.h>
 #include <stdlib.h>
 
+#include "deca_regs.h"
 #include "deca_device_api.h"
 #include "deca_param_types.h"
 
@@ -24,18 +27,12 @@ const uint8 chan_idx[NUM_CH_SUPPORTED] = {0, 0, 1, 2, 3, 4, 0, 5};
 //-----------------------------------------
 const uint32 tx_config[NUM_CH] =
 {
-        //Channel 1
-        0x25c40,
-        //Channel 2
-        0x45ca0,
-        //Channel 3
-        0xa6cc0,
-        //Channel 4
-        0x65c80,
-        //Channel 5
-        0x1e3fe0,
-        //Channel 7
-        0x1e7de0
+        RF_TXCTRL_CH1,      /* Tx value match UM */
+        RF_TXCTRL_CH2,
+        RF_TXCTRL_CH3,
+        RF_TXCTRL_CH4,
+        RF_TXCTRL_CH5,
+        RF_TXCTRL_CH7,
 };
 
 //RF -> Channel_Specific_Cfg -> Channel_Cfg -> RF_PLL -> RF PLL2
@@ -54,7 +51,8 @@ const uint8 pll2_config[NUM_CH][5] =
     { 0x1D, 0x04, 0x00, 0x08, 0xA6} //6.5Ghz WBW
 };
 
-const uint8 pll2calcfg = 0x70;
+const uint8 pll2calcfg = (0x60 | 0x10) ;    /* Bits 7:5 must always be set to binary “011”. Failure to maintain this value will result in DW1000 malfunction. */
+
 
 //bandwidth configuration
 const uint8 rx_config[NUM_BW] =
@@ -66,9 +64,9 @@ const uint8 rx_config[NUM_BW] =
 
 const agc_cfg_struct agc_config =
 {
-    0x2502a907,
+    AGC_TUNE2_VAL,
 
-    { 0x8870, 0x889B }  //adc target
+    { AGC_TUNE1_16M , AGC_TUNE1_64M }  //adc target
 };
 
 

@@ -1,32 +1,28 @@
 /*! ------------------------------------------------------------------------------------------------------------------
- * FILE: deca_device.c - DecaWave device control functions
+ * @file deca_device.c - DecaWave device control functions
  *
+ * @attention
  * Copyright 2008, 2013 (c) DecaWave Ltd, Dublin, Ireland.
  *
  * All rights reserved.
  *
- * Author(s): Billy Verso / Zoran Skrba
+ * @author Billy Verso / Zoran Skrba
  */
 
 #include "deca_types.h"
 #include "deca_param_types.h"
-#include "deca_device_api.h"
 #include "deca_regs.h"
+#include "deca_device_api.h"
 #include "../spiDriver/spiDriver.h"
-
 
 // Defines for enable_clocks function
 #define FORCE_SYS_XTI  0
 #define ENABLE_ALL_SEQ 1
 #define FORCE_SYS_PLL  2
-#define READ_LDE_ON    5
-#define READ_LDE_OFF   6
 #define READ_ACC_ON    7
 #define READ_ACC_OFF   8
-#define FORCE_LDE_ON   9
-#define FORCE_LDE_OFF  10
-#define FORCE_NVM_ON   11
-#define FORCE_NVM_OFF  12
+#define FORCE_OTP_ON   11
+#define FORCE_OTP_OFF  12
 #define FORCE_TX_PLL   13
 
 // #define DWT_API_ERROR_CHECK     // define so API checks config input parameters
@@ -43,12 +39,12 @@ int _dwt_checkclkplllock(void);
 void _dwt_enableclocks(int clocks) ;
 // Configure the ucode (FP algorithm) parameters
 void _dwt_configlde(int prf);
-// load ucode from NVMEM/ROM
+// load ucode from OTP/ROM
 int _dwt_loaducodefromrom(void);
 //read non-volatile memory
-uint32 _dwt_nvmread(uint32 address);
+uint32 _dwt_otpread(uint32 address);
 //program the non-volatile memory
-uint32 _dwt_nvmprogword32(uint32 data, uint16 address);
+uint32 _dwt_otpprogword32(uint32 data, uint16 address);
 //upload the device configuration into always on memory
 void _dwt_aonarrayupload(void);
 // -------------------------------------------------------------------------------------------------------------------
@@ -69,16 +65,17 @@ typedef struct
     uint32      txFCTRL ;           // keep TX_FCTRL register config
     uint16      rfrxDly;            // rf delay (delay though the RF blocks before the signal comes out of the antenna i.e. "antenna delay")
     uint16      rftxDly;            // rf delay (delay though the RF blocks before the signal comes out of the antenna i.e. "antenna delay")
-    uint32      antennaDly;         // antenna delay read from NVM 64 PRF value is in high 16 bits and 16M PRF in low 16 bits
-    uint8       xtrim;              // xtrim value read from NVM
+    uint32      antennaDly;         // antenna delay read from OTP 64 PRF value is in high 16 bits and 16M PRF in low 16 bits
+    uint8       xtrim;              // xtrim value read from OTP
     uint32      sysCFGreg ;         // local copy of system config register
-    uint32      txPowCfg[12];       // stores the Tx power configuration read from NVM (6 channels consecutively with PRF16 then 64, e.g. Ch 1 PRF16 is index 0 and 64 index 1)
+    uint32      txPowCfg[12];       // stores the Tx power configuration read from OTP (6 channels consecutively with PRF16 then 64, e.g. Ch 1 PRF16 is index 0 and 64 index 1)
     uint8       dblbuffon;          // double rx buffer mode flag
                                     // the dwt_isr() will only process the events that "enabled" (i.e. the ones that generate interrupt)
     dwt_callback_data_t cdata;      // callback data structure
 
     uint32      states[3] ;         //MP workaround debug states register
     uint8       statescount ;
+    uint8		wait4resp ;			//wait 4 response was set with last TX start command
     int         prfIndex ;
 
     void (*dwt_txcallback)(const dwt_callback_data_t *txd);
@@ -89,9 +86,9 @@ typedef struct
 static dwt_local_data_t dw1000local ; // Static local device data
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_initialise()
+ * @fn dwt_initialise()
  *
- * Description: This function initiates communications with the DW1000 transceiver
+ * @brief This function initiates communications with the DW1000 transceiver
  * and reads its DEV_ID register (address 0x00) to verify the IC is one supported
  * by this software (e.g. DW1000 32-bit device ID value is 0xDECA0130).  Then it
  * does any initial once only device configurations needed for use and initialises
@@ -121,13 +118,13 @@ static dwt_local_data_t dw1000local ; // Static local device data
 
 int dwt_initialise(uint16 config)
 {
-    uint32 reg;
     int i = 0;
 
     dw1000local.statescount = 0;
     dw1000local.dblbuffon = 0; //double mode off by default
     dw1000local.prfIndex = 0; //16M
     dw1000local.cdata.aatset = 0;
+    dw1000local.wait4resp = 0;
 
     dw1000local.dwt_txcallback = NULL ;
     dw1000local.dwt_rxcallback = NULL ;
@@ -140,27 +137,27 @@ int dwt_initialise(uint16 config)
         return DWT_ERROR ;
     }
 
-    _dwt_enableclocks(FORCE_SYS_XTI); //NOTE: set system clock to XTI - this is necessary to make sure the values read by _dwt_nvmread are reliable
+    _dwt_enableclocks(FORCE_SYS_XTI); //NOTE: set system clock to XTI - this is necessary to make sure the values read by _dwt_otpread are reliable
 
-    dw1000local.partID = _dwt_nvmread(PARTID_ADDRESS);
+    dw1000local.partID = _dwt_otpread(PARTID_ADDRESS);
 
-    dw1000local.lotID = _dwt_nvmread(LOTID_ADDRESS);
+    dw1000local.lotID = _dwt_otpread(LOTID_ADDRESS);
 
     if(config & DWT_LOADANTDLY)
-        dw1000local.antennaDly = _dwt_nvmread(ANTDLY_ADDRESS);
+        dw1000local.antennaDly = _dwt_otpread(ANTDLY_ADDRESS);
     else
         dw1000local.antennaDly = 0;
 
     if(config & DWT_LOADXTALTRIM)
-        dw1000local.xtrim = _dwt_nvmread(XTRIM_ADDRESS) & 0x1F;
+        dw1000local.xtrim = _dwt_otpread(XTRIM_ADDRESS) & 0x1F;
     else
-        dw1000local.xtrim = 0;
+        dw1000local.xtrim = pll2calcfg & 0x1F ; // set to mid-range default as per deca_params_init
 
     if(config & DWT_LOADTXCONFIG)
     {
         for(i=0; i<12; i++)
         {
-            dw1000local.txPowCfg[i] = _dwt_nvmread(TXCFG_ADDRESS+i);
+            dw1000local.txPowCfg[i] = _dwt_otpread(TXCFG_ADDRESS+i);
         }
     }
     else
@@ -173,11 +170,15 @@ int dwt_initialise(uint16 config)
 
     // load leading edge detect code
     if(config & DWT_LOADUCODE)
+	{
         _dwt_loaducodefromrom();
-
-    reg = dwt_read32bitoffsetreg(PMSC_ID, 0x0);
-    reg &= 0xFFB0FFFF; //clear the LDE write clock enable
-    dwt_write32bitoffsetreg( PMSC_ID, 0x0, reg);
+	}
+	else //should disable the LDERUN enable bit in 0x36, 0x4
+	{
+		uint16 rega = dwt_read16bitoffsetreg(PMSC_ID, PMSC_CTRL1_OFFSET+1) ;
+		rega &= 0xFD ; //clear LDERUN bit
+		dwt_write16bitoffsetreg(PMSC_ID, PMSC_CTRL1_OFFSET+1, rega) ;
+	}
 
     _dwt_enableclocks(FORCE_SYS_PLL); //force system clock to use PLL
 
@@ -190,18 +191,27 @@ int dwt_initialise(uint16 config)
         uint32 reg;
         // Set up MFIO
         reg = dwt_read32bitreg(GPIO_CTRL_ID);
-        reg |= 0x00014000 ; //7 and 8 to mode
+        //reg |= 0x00014000 ; //7 and 8 to mode - to be used with PA
+		reg |= 0x00050000 ; //8 and 9 to mode - RX/TX testing
         dwt_write32bitreg(GPIO_CTRL_ID,reg);
+
+        //disable fine grain sequencing - this is needed when using PA on the TX
+        //dwt_write16bitoffsetreg(PMSC_ID,PMSC_TXFINESEQ_OFFSET,PMSC_TXFINESEQ_DIS_MASK);
     }*/
+
+    //set auto RX RST test mode
+    //reg = dwt_read32bitoffsetreg(PMSC_ID, PMSC_CTRL1_OFFSET);
+    //dwt_write32bitoffsetreg(PMSC_ID,PMSC_CTRL1_OFFSET,(reg | (1 << 21)));
+
     return DWT_SUCCESS ;
 
 } // end dwt_initialise()
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_getpartid()
+ * @fn dwt_getpartid()
  *
- *  Description: This is used to return the read part ID of the device
+ *  @brief This is used to return the read part ID of the device
  *
  * input parameters
  *
@@ -215,9 +225,9 @@ uint32 dwt_getpartid(void)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_getlotid()
+ * @fn dwt_getlotid()
  *
- *  Description: This is used to return the read lot ID of the device
+ *  @brief This is used to return the read lot ID of the device
  *
  * input parameters
  *
@@ -231,9 +241,9 @@ uint32 dwt_getlotid(void)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readdevid()
+ * @fn dwt_readdevid()
  *
- *  Description: This is used to return the read device tyoe and revision information of the DW1000 device (MP part is 0xDECA0130)
+ *  @brief This is used to return the read device tyoe and revision information of the DW1000 device (MP part is 0xDECA0130)
  *
  * input parameters:
  *
@@ -247,9 +257,9 @@ uint32 dwt_readdevid(void)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configuretxrf()
+ * @fn dwt_configuretxrf()
  *
- * Description: This function provides the API for the configuration of the TX spectrum
+ * @brief This function provides the API for the configuration of the TX spectrum
  * including the power and pulse generator delay. The input is a pointer to the data structure
  * of type dwt_txconfig_t that holds all the configurable items.
  *
@@ -265,7 +275,7 @@ void dwt_configuretxrf(dwt_txconfig_t *config)
 {
 
     //Config RF TX PG_DELAY
-    dwt_writetodevice(TX_CAL_ID, 0x0b, 1, &config->PGdly);
+    dwt_writetodevice(TX_CAL_ID, TC_PGDELAY_OFFSET, 1, &config->PGdly);
 
     //Configure TX power
     dwt_write32bitreg(TX_POWER_ID, config->power);
@@ -274,9 +284,9 @@ void dwt_configuretxrf(dwt_txconfig_t *config)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_getotptxpower()
+ * @fn dwt_getotptxpower()
  *
- * Description: This API function returns the tx power value read from OTP memory as part of initialisation
+ * @brief This API function returns the tx power value read from OTP memory as part of initialisation
  *
  * input parameters
  * @param prf   -   this is the PRF e.g. DWT_PRF_16M or DWT_PRF_64M
@@ -293,9 +303,9 @@ uint32 dwt_getotptxpower(uint8 prf, uint8 chan)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configure()
+ * @fn dwt_configure()
  *
- * Description: This function provides the main API for the configuration of the
+ * @brief This function provides the main API for the configuration of the
  * DW1000 and this low-level driver.  The input is a pointer to the data structure
  * of type dwt_config_t that holds all the configurable items.
  * The dwt_config_t structure shows which ones are supported
@@ -311,7 +321,7 @@ uint32 dwt_getotptxpower(uint8 prf, uint8 chan)
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
-int dwt_configure(dwt_config_t *config, uint8 use_nvmconfigvalues)
+int dwt_configure(dwt_config_t *config, uint8 use_otpconfigvalues)
 {
     uint8 nsSfd_result  = 0;
     uint8 useDWnsSFD = 0;
@@ -360,13 +370,13 @@ int dwt_configure(dwt_config_t *config, uint8 use_nvmconfigvalues)
     // for 110 kbps we need to special setup
     if(DWT_BR_110K == config->dataRate)
     {
-        dw1000local.sysCFGreg |= SYS_CFG_F110K ;
+        dw1000local.sysCFGreg |= SYS_CFG_RXM110K ;
 
         reg16 >>= 3;  //div by 8
     }
     else
     {
-        dw1000local.sysCFGreg &= (~SYS_CFG_F110K) ;
+        dw1000local.sysCFGreg &= (~SYS_CFG_RXM110K) ;
     }
 
     dw1000local.longFrames = config->phrMode ;
@@ -375,61 +385,61 @@ int dwt_configure(dwt_config_t *config, uint8 use_nvmconfigvalues)
 
     dwt_write32bitreg(SYS_CFG_ID,dw1000local.sysCFGreg) ;
     //write/set the lde_replicaCoeff
-    dwt_write16bitoffsetreg(LDE_CFG_STS_ID, 0x2804, reg16 ) ;
+    dwt_write16bitoffsetreg(LDE_IF_ID, LDE_REPC_OFFSET, reg16 ) ;
 
     _dwt_configlde(prfIndex);
 
-    //config RF pll (for a given channel)
-    //configure PLL2/RF PLL block CFG
-    dwt_writetodevice(SYNTH_CAL_ID, 0x07, 5, &pll2_config[chan_idx[chan]][0]);
+//    config RF pll (for a given channel)
+//    configure PLL2/RF PLL block CFG
+    dwt_writetodevice(FS_CTRL_ID, FS_PLLCFG_OFFSET, 5, &pll2_config[chan_idx[chan]][0]);    //alliv rewrite to 32bit + 8 bit
     //configure PLL2/RF PLL block CAL
-    dwt_writetodevice(SYNTH_CAL_ID, 0x0e, 1, &pll2calcfg);
-    //PLL wont be enabled until a TX/RX enable is issued later on
+    dwt_writetodevice(FS_CTRL_ID, FS_XTALT_OFFSET, 1, &pll2calcfg);
 
     // Configure RF RX blocks (for specified channel/badwidth)
-    dwt_writetodevice(RF_CFG_STS_ID, RF_CTRL2_SUB_ADDR, 1, &rx_config[bw]);
+    dwt_writetodevice(RF_CONF_ID, RF_RXCTRLH_OFFSET, 1, &rx_config[bw]);
 
     // Configure RF TX blocks (for specified channel and prf)
     //Config RF TX control
-    dwt_write32bitoffsetreg(RF_CFG_STS_ID, RF_CTRLTX_SUB_ADDR, tx_config[chan_idx[chan]]);
+    dwt_write32bitoffsetreg(RF_CONF_ID, RF_TXCTRL_OFFSET, tx_config[chan_idx[chan]]);
 
     // Configure the baseband parameters (for specified prf, bit rate, pac, and SFD settings)
     //DTUNE0
-    dwt_write16bitoffsetreg(DRX_CFG_STS_ID, RX_DTUNE0_SUB_ADDR2, sftsh[config->dataRate][config->nsSFD]);
+    dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_TUNE0b_OFFSET, sftsh[config->dataRate][config->nsSFD]);
 
     //DTUNE1
-    dwt_write16bitoffsetreg(DRX_CFG_STS_ID, RX_DTUNE1_SUB_ADDR, dtune1[prfIndex]);
+    dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_TUNE1a_OFFSET, dtune1[prfIndex]);
 
     if(config->dataRate == DWT_BR_110K)
     {
-        dwt_write16bitoffsetreg(DRX_CFG_STS_ID, RX_DTUNE1_SUB_ADDR6, 0x64);
+        dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_TUNE1b_OFFSET, 0x64);
     }
     else
     {
         if(config->txPreambLength == DWT_PLEN_64) //if preamble length is 64
         {
             uint8 temp = 0x10;
-            dwt_write16bitoffsetreg(DRX_CFG_STS_ID, RX_DTUNE1_SUB_ADDR6, 0x10);
-            dwt_writetodevice(DRX_CFG_STS_ID, 0x26, 1, &temp);
+            dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_TUNE1b_OFFSET, 0x10);
+            dwt_writetodevice(DRX_CONF_ID, 0x26, 1, &temp);
         }
         else
         {
             uint8 temp = 0x28;
-            dwt_write16bitoffsetreg(DRX_CFG_STS_ID, RX_DTUNE1_SUB_ADDR6, 0x20);
-            dwt_writetodevice(DRX_CFG_STS_ID, 0x26, 1, &temp);
+            dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_TUNE1b_OFFSET, 0x20);
+            dwt_writetodevice(DRX_CONF_ID, 0x26, 1, &temp);
         }
     }
 
     //DTUNE2
-    dwt_write32bitoffsetreg(DRX_CFG_STS_ID,RX_DTUNE2_SUB_ADDR,digital_bb_config[prfIndex][config->rxPAC]);
+    dwt_write32bitoffsetreg(DRX_CONF_ID, DRX_TUNE2_OFFSET, digital_bb_config[prfIndex][config->rxPAC]);
 
     //DTUNE3
-    if(config->sfdTO != DWT_SFDTOC_DEF) //if default value no need to program it
-        dwt_write16bitoffsetreg(DRX_CFG_STS_ID,RX_DTUNE3_SUB_ADDR,config->sfdTO);
+    if(config->sfdTO != DWT_SFDTOC_DEF) { //if default value no need to program it
+        dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_SFDTOC_OFFSET, config->sfdTO);
+    }
     //don't allow 0 - SFD timeout will always be enabled
-    if(config->sfdTO == 0)
-        dwt_write16bitoffsetreg(DRX_CFG_STS_ID,RX_DTUNE3_SUB_ADDR, DWT_SFDTOC_DEF);
-
+    if(config->sfdTO == 0) {
+        dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_SFDTOC_OFFSET, DWT_SFDTOC_DEF);
+    }
     // configure AGC parameters
     dwt_write32bitoffsetreg( AGC_CFG_STS_ID, 0xC, agc_config.lo32);
     dwt_write16bitoffsetreg( AGC_CFG_STS_ID, 0x4, agc_config.target[prfIndex]);
@@ -442,13 +452,13 @@ int dwt_configure(dwt_config_t *config, uint8 use_nvmconfigvalues)
          nsSfd_result = 3 ;
          useDWnsSFD = 1 ;
     }
-    regval =  (chan << CHAN_CTRL_TXCHAN_SHIFT) |            // Transmit Channel
-              (chan << CHAN_CTRL_RXCHAN_SHIFT) |            // Receive Channel
-              (config->prf << CHAN_CTRL_RXFPRF_SHIFT) |     // RX PRF
-              (nsSfd_result << CHAN_CTRL_TNS_SHIFT) |       // nsSFD enable RX&TX
-              (useDWnsSFD << CHAN_CTRL_DW_SFD_SHIFT) |      // use DW nsSFD
-              (config->txCode << CHAN_CTRL_TXPCOD_SHIFT) |  // TX Preamble Code
-              (config->rxCode << CHAN_CTRL_RXPCOD_SHIFT) ;  // RX Preamble Code
+    regval =  (CHAN_CTRL_TX_CHAN_MASK & (chan << CHAN_CTRL_TX_CHAN_SHIFT)) |            // Transmit Channel
+              (CHAN_CTRL_RX_CHAN_MASK & (chan << CHAN_CTRL_RX_CHAN_SHIFT)) |            // Receive Channel
+              (CHAN_CTRL_RXFPRF_MASK & (config->prf << CHAN_CTRL_RXFPRF_SHIFT)) |     // RX PRF
+              ((CHAN_CTRL_TNSSFD|CHAN_CTRL_RNSSFD) & (nsSfd_result << CHAN_CTRL_TNSSFD_SHIFT)) |       // nsSFD enable RX&TX
+              (CHAN_CTRL_DWSFD & (useDWnsSFD << CHAN_CTRL_DWSFD_SHIFT)) |      // use DW nsSFD
+              (CHAN_CTRL_TX_PCOD_MASK & (config->txCode << CHAN_CTRL_TX_PCOD_SHIFT)) |  // TX Preamble Code
+              (CHAN_CTRL_RX_PCOD_MASK & (config->rxCode << CHAN_CTRL_RX_PCOD_SHIFT)) ;  // RX Preamble Code
 
     dwt_write32bitreg(CHAN_CTRL_ID,regval) ;
 
@@ -456,18 +466,18 @@ int dwt_configure(dwt_config_t *config, uint8 use_nvmconfigvalues)
     // Set up TX Ranging Bit and Data Rate
     {
         uint32 x = (config->txPreambLength | config->prf)  <<  16;
-        dw1000local.txFCTRL = x | TX_FCTRL_RANG_BIT |     // always set ranging bit !!!
-                                (config->dataRate << TX_FCTRL_RATE_SHFT) ;
+        dw1000local.txFCTRL = x | TX_FCTRL_TR |     /* always set ranging bit !!! */
+                                (config->dataRate << TX_FCTRL_TXBR_SHFT) ;
 
         dwt_write32bitoffsetreg(TX_FCTRL_ID,0,dw1000local.txFCTRL) ;
     }
 
-    if (use_nvmconfigvalues & DWT_LOADXTALTRIM)
+    if (use_otpconfigvalues & DWT_LOADXTALTRIM)
     {
         dwt_xtaltrim(dw1000local.xtrim);
     }
 
-    if (use_nvmconfigvalues & DWT_LOADANTDLY)
+    if (use_otpconfigvalues & DWT_LOADANTDLY)
     {
         //put half of the antenna delay value into tx and half into rx
         dwt_setrxantennadelay(((dw1000local.antennaDly >> (16*prfIndex)) & 0xFFFF) >> 1);
@@ -479,9 +489,9 @@ int dwt_configure(dwt_config_t *config, uint8 use_nvmconfigvalues)
 } // end dwt_configure()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setrxantennadelay()
+ * @fn dwt_setrxantennadelay()
  *
- * Description: This API function writes the antenna delay (in time units) to RX registers
+ * @brief This API function writes the antenna delay (in time units) to RX registers
  *
  * input parameters:
  * @param antennaDly - this is the total (RX) antenna delay value, which
@@ -496,13 +506,13 @@ void dwt_setrxantennadelay(uint16 antennaDly)
     // -------------------------------------------------------------------------------------------------------------------
     // set the antenna delay
     dw1000local.rfrxDly = antennaDly;
-    dwt_write16bitoffsetreg(LDE_CFG_STS_ID,0x1804,dw1000local.rfrxDly) ;
+    dwt_write16bitoffsetreg(LDE_IF_ID,LDE_RXANTD_OFFSET,dw1000local.rfrxDly) ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_settxantennadelay()
+ * @fn dwt_settxantennadelay()
  *
- * Description: This API function writes the antenna delay (in time units) to TX registers
+ * @brief This API function writes the antenna delay (in time units) to TX registers
  *
  * input parameters:
  * @param antennaDly - this is the total (TX) antenna delay value, which
@@ -518,14 +528,14 @@ void dwt_settxantennadelay(uint16 antennaDly)
     // -------------------------------------------------------------------------------------------------------------------
     // set the tx antenna delay for auto tx timestamp adjustment
     dw1000local.rftxDly  = antennaDly;
-    dwt_write16bitoffsetreg(TX_ANTD, 0x0, dw1000local.rftxDly) ;
+    dwt_write16bitoffsetreg(TX_ANTD_ID, 0x0, dw1000local.rftxDly) ;
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readantennadelay()
+ * @fn dwt_readantennadelay()
  *
- * Description: This API function returns the antenna delay read from the OTP memory as part of device initialisation
+ * @brief This API function returns the antenna delay read from the OTP memory as part of device initialisation
  * Note: the antenna delay will only be read if dwt_initialise is called with DWT_LOADANTDLY bit set in the config parameter
  *
  * input parameters:
@@ -540,9 +550,9 @@ uint16 dwt_readantennadelay(uint8 prf)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_writetxdata()
+ * @fn dwt_writetxdata()
  *
- * Description: This API function writes the supplied TX data into the DW1000's
+ * @brief This API function writes the supplied TX data into the DW1000's
  * TX buffer.  The input parameters are the data length in bytes and a pointer
  * to those data bytes.
  *
@@ -559,6 +569,7 @@ uint16 dwt_readantennadelay(uint8 prf)
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 int dwt_writetxdata(uint16 txFrameLength, uint8 *txFrameBytes, uint16 txBufferOffset)
 {
 #ifdef DWT_API_ERROR_CHECK
@@ -584,9 +595,9 @@ int dwt_writetxdata(uint16 txFrameLength, uint8 *txFrameBytes, uint16 txBufferOf
 } // end dwt_writetxdata()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_writetxfctrl()
+ * @fn dwt_writetxfctrl()
  *
- * Description: This API function configures the TX frame control register before the transmission of a frame
+ * @brief This API function configures the TX frame control register before the transmission of a frame
  *
  * input parameters:
  * @param txFrameLength - this is the length of TX message (including the 2 byte CRC) - max is 1023
@@ -600,6 +611,7 @@ int dwt_writetxdata(uint16 txFrameLength, uint8 *txFrameBytes, uint16 txBufferOf
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  *
  */
+#pragma GCC optimize ("O3")
 int dwt_writetxfctrl(uint16 txFrameLength, uint16 txBufferOffset)
 {
 
@@ -626,9 +638,9 @@ int dwt_writetxfctrl(uint16 txFrameLength, uint16 txBufferOffset)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readrxdata()
+ * @fn dwt_readrxdata()
  *
- *  Description: This is used to read the data from the RX buffer, from an offset location give by offset paramter
+ *  @brief This is used to read the data from the RX buffer, from an offset location give by offset paramter
  *
  * input parameters
  * @param buffer - the buffer into which the data will be read
@@ -639,39 +651,40 @@ int dwt_writetxfctrl(uint16 txFrameLength, uint16 txBufferOffset)
  *
  * no return value
  */
+#pragma GCC optimize ("O3")
 void dwt_readrxdata(uint8 *buffer, uint16 length, uint16 rxBufferOffset)
 {
     dwt_readfromdevice(RX_BUFFER_ID,rxBufferOffset,length,buffer) ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readaccdata()
+ * @fn dwt_readaccdata()
  *
- *  Description: This is used to read the data from the Accumulator buffer, from an offset location give by offset parameter
+ *  @brief This is used to read the data from the Accumulator buffer, from an offset location give by offset parameter
  *
  * input parameters
  * @param buffer - the buffer into which the data will be read
  * @param length - the length of data to read (in bytes)
- * @param rxBufferOffset - the offset in the acc buffer from which to read the data
+ * @param accOffset - the offset in the acc buffer from which to read the data
  *
  * output parameters
  *
  * no return value
  */
-void dwt_readaccdata(uint8 *buffer, uint16 len, uint16 rxBufferOffset)
+void dwt_readaccdata(uint8 *buffer, uint16 len, uint16 accOffset)
 {
     // Force on the ACC clocks if we are sequenced
     _dwt_enableclocks(READ_ACC_ON);
 
-    dwt_readfromdevice(RX_ACCD_ID,0,len,buffer) ;
+    dwt_readfromdevice(ACC_MEM_ID,accOffset,len,buffer) ;
 
     _dwt_enableclocks(READ_ACC_OFF); //revert clocks back
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readdignostics()
+ * @fn dwt_readdignostics()
  *
- *  Description: Description: this function reads the rx signal quality diagnostic data
+ *  @brief @brief this function reads the rx signal quality diagnostic data
  *
  * input parameters
  * @param diagnostics - diagnostic structure pointer, this will contain the diagnostic data read from the DW1000
@@ -692,7 +705,7 @@ void dwt_readdignostics(dwt_rxdiag_t *diagnostics)
     diagnostics->firstPath = (double) fp * (1.0/64.0) ;
 
     //LDE diagnostic data
-    diagnostics->maxNoise = dwt_read16bitoffsetreg(LDE_CFG_STS_ID, 0x0);
+    diagnostics->maxNoise = dwt_read16bitoffsetreg(LDE_IF_ID, LDE_THRESH_OFFSET);
 
     //read all 8 bytes in one SPI transaction
     dwt_readfromdevice(RX_FQUAL_ID, 0x0, 8, (uint8*)&diagnostics->stdNoise);
@@ -703,7 +716,7 @@ void dwt_readdignostics(dwt_rxdiag_t *diagnostics)
 
     diagnostics->firstPathAmp1 = dwt_read16bitoffsetreg(RX_TIME_ID, 0x7) ;
 
-    diagnostics->rxPreamCount = (dwt_read32bitreg(RX_FINFO_ID) & RX_FINFO_RXP2SS_MASK) >> RX_FINFO_RXP2SS_SHIFT  ;
+    diagnostics->rxPreamCount = (dwt_read32bitreg(RX_FINFO_ID) & RX_FINFO_RXPACC_MASK) >> RX_FINFO_RXPACC_SHIFT  ;
 
     //diagnostics->debug1 = dwt_read32bitoffsetreg(0x27, 0x28);
     //diagnostics->debug2 = dwt_read32bitoffsetreg(0x27, 0xc);
@@ -713,9 +726,9 @@ void dwt_readdignostics(dwt_rxdiag_t *diagnostics)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readtxtimestamp()
+ * @fn dwt_readtxtimestamp()
  *
- *  Description: This is used to read the TX timestamp (adjusted with the programmed antenna delay)
+ *  @brief This is used to read the TX timestamp (adjusted with the programmed antenna delay)
  *
  * input parameters
  * @param timestamp - a pointer to a 5-byte buffer which will store the read TX timestamp time
@@ -724,15 +737,16 @@ void dwt_readdignostics(dwt_rxdiag_t *diagnostics)
  *
  * no return value
  */
+#pragma GCC optimize ("O3")
 void dwt_readtxtimestamp(uint8 * timestamp)
 {
-    dwt_readfromdevice(TX_TIME_ID, 0, TX_TIME_LEN, timestamp) ; // read bytes directly into buffer
+    dwt_readfromdevice(TX_TIME_ID, 0, TX_TIME_TX_STAMP_LEN, timestamp) ; // read bytes directly into buffer
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readtxtimestamphi32()
+ * @fn dwt_readtxtimestamphi32()
  *
- *  Description: This is used to read the high 32-bits of the TX timestamp (adjusted with the programmed antenna delay)
+ *  @brief This is used to read the high 32-bits of the TX timestamp (adjusted with the programmed antenna delay)
  *
  * input parameters
  *
@@ -740,15 +754,33 @@ void dwt_readtxtimestamp(uint8 * timestamp)
  *
  * returns high 32-bits of TX timestamp
  */
+#pragma GCC optimize ("O3")
 uint32 dwt_readtxtimestamphi32(void)
 {
     return dwt_read32bitoffsetreg(TX_TIME_ID, 1);
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readrxtimestamp()
+ * @fn dwt_readtxtimestamplo32()
  *
- *  Description: This is used to read the RX timestamp (adjusted time of arrival)
+ *  @brief This is used to read the low 32-bits of the TX timestamp (adjusted with the programmed antenna delay)
+ *
+ * input parameters
+ *
+ * output parameters
+ *
+ * returns low 32-bits of TX timestamp
+ */
+#pragma GCC optimize ("O3")
+uint32 dwt_readtxtimestamplo32(void)
+{
+    return dwt_read32bitoffsetreg(TX_TIME_ID, 0);
+}
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @fn dwt_readrxtimestamp()
+ *
+ *  @brief This is used to read the RX timestamp (adjusted time of arrival)
  *
  * input parameters
  * @param timestamp - a pointer to a 5-byte buffer which will store the read RX timestamp time
@@ -757,30 +789,48 @@ uint32 dwt_readtxtimestamphi32(void)
  *
  * no return value
  */
+#pragma GCC optimize ("O3")
 void dwt_readrxtimestamp(uint8 * timestamp)
 {
-    dwt_readfromdevice(RX_TIME_ID, 0, RX_TIME_LEN, timestamp) ; //get the adjusted time of arrival
+    dwt_readfromdevice(RX_TIME_ID, 0, RX_TIME_RX_STAMP_LEN, timestamp) ; //get the adjusted time of arrival
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readrxtimestamphi32()
+ * @fn dwt_readrxtimestamphi32()
  *
- *  Description: This is used to read the high 32-bits of the RX timestamp (adjusted with the programmed antenna delay)
+ *  @brief This is used to read the high 32-bits of the RX timestamp (adjusted with the programmed antenna delay)
  *
  * input parameters
  *
  * output parameters
  * uint32 rxtimestamp (hi 32-bits of RX timestamp)
  */
+#pragma GCC optimize ("O3")
 uint32 dwt_readrxtimestamphi32(void)
 {
     return dwt_read32bitoffsetreg(RX_TIME_ID, 1);
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readsystimestamphi32()
+ * @fn dwt_readrxtimestamplo32()
  *
- *  Description: This is used to read the high 32-bits of the system time
+ *  @brief This is used to read the low 32-bits of the RX timestamp (adjusted with the programmed antenna delay)
+ *
+ * input parameters
+ *
+ * output parameters
+ * uint32 rxtimestamp (lo 32-bits of RX timestamp)
+ */
+#pragma GCC optimize ("O3")
+uint32 dwt_readrxtimestamplo32(void)
+{
+    return dwt_read32bitoffsetreg(RX_TIME_ID, 0);
+}
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @fn dwt_readsystimestamphi32()
+ *
+ *  @brief This is used to read the high 32-bits of the system time
  *
  * input parameters
  *
@@ -788,15 +838,16 @@ uint32 dwt_readrxtimestamphi32(void)
  *
  * returns high 32-bits of system time timestamp
  */
+#pragma GCC optimize ("O3")
 uint32 dwt_readsystimestamphi32(void)
 {
-    return dwt_read32bitoffsetreg(SYS_TIME_L_ID, 1);
+    return dwt_read32bitoffsetreg(SYS_TIME_ID, 1);
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readsystime()
+ * @fn dwt_readsystime()
  *
- *  Description: This is used to read the system time
+ *  @brief This is used to read the system time
  *
  * input parameters
  * @param timestamp - a pointer to a 5-byte buffer which will store the read system time
@@ -806,16 +857,17 @@ uint32 dwt_readsystimestamphi32(void)
  *
  * returns
  */
+#pragma GCC optimize ("O3")
 void dwt_readsystime(uint8 * timestamp)
 {
-    dwt_readfromdevice(SYS_TIME_L_ID, 0, SYS_TIME_LEN, timestamp) ; //get the adjusted time of arrival
+    dwt_readfromdevice(SYS_TIME_ID, 0, SYS_TIME_LEN, timestamp) ; //get the adjusted time of arrival
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_writetodevice()
+ * @fn dwt_writetodevice()
  *
- * Description:  this function is used to write to the DW1000 device registers
+ * @brief  this function is used to write to the DW1000 device registers
  * Notes:
  *        1. Firstly we create a header (the first byte is a header byte)
  *        a. check if sub index is used, if subindexing is used - set bit-6 to 1 to signify that the sub-index address follows the register index byte
@@ -835,6 +887,7 @@ void dwt_readsystime(uint8 * timestamp)
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 int dwt_writetodevice
 (
     uint16      recordNumber,
@@ -845,9 +898,9 @@ int dwt_writetodevice
 {
     uint8 header[3] ;                                       // buffer to compose header in
     int   cnt = 0;                                          // counter for length of header
-
+#ifdef DWT_API_ERROR_CHECK
     if (recordNumber > 0x3F) return DWT_ERROR ;                    // record number is limited to 6-bits.
-
+#endif
     // Write message header selecting WRITE operation and addresses as appropriate (this is one to three bytes long)
 
     if (index == 0)                                         // for index of 0, no sub-index is required
@@ -856,9 +909,10 @@ int dwt_writetodevice
     }
     else
     {
+#ifdef DWT_API_ERROR_CHECK
         if (index > 0x7FFF) return DWT_ERROR ;                     // index is limited to 15-bits.
         if ((index + length)> 0x7FFF) return DWT_ERROR ;           // sub-addressable area is limited to 15-bits.
-
+#endif
         header[cnt++] = 0xC0 | recordNumber ;               // bit-7 is WRITE operation, bit-6 one=sub-address follows, bits 5-0 is reg file id
 
         if (index <= 127)                                   // for non-zero index < 127, just a single sub-index byte is required
@@ -879,9 +933,9 @@ int dwt_writetodevice
 } // end dwt_writetodevice()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readfromdevice()
+ * @fn dwt_readfromdevice()
  *
- * Description:  this function is used to read from the DW1000 device registers
+ * @brief  this function is used to read from the DW1000 device registers
  * Notes:
  *        1. Firstly we create a header (the first byte is a header byte)
  *        a. check if sub index is used, if subindexing is used - set bit-6 to 1 to signify that the sub-index address follows the register index byte
@@ -899,8 +953,9 @@ int dwt_writetodevice
  *
  * output parameters
  *
- * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
+ * @return DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 int dwt_readfromdevice
 (
     uint16  recordNumber,
@@ -911,8 +966,9 @@ int dwt_readfromdevice
 {
     uint8 header[3] ;                                       // buffer to compose header in
     int   cnt = 0;                                          // counter for length of header
-
+#ifdef DWT_API_ERROR_CHECK
     if (recordNumber > 0x3F) return DWT_ERROR ;                    // record number is limited to 6-bits.
+#endif
     // Write message header selecting READ operation and addresses as appropriate (this is one to three bytes long)
 
     if (index == 0)                                         // for index of 0, no sub-index is required
@@ -921,9 +977,10 @@ int dwt_readfromdevice
     }
     else
     {
+#ifdef DWT_API_ERROR_CHECK
         if (index > 0x7FFF) return DWT_ERROR ;                     // index is limited to 15-bits.
         if ((index + length)> 0x7FFF) return DWT_ERROR ;           // sub-addressible area is limited to 15-bits.
-
+#endif
         header[cnt++] = (uint8)(0x40 | recordNumber) ;      // bit-7 zero is READ operation, bit-6 one=sub-address follows, bits 5-0 is reg file id
 
         if (index <= 127)                                   // for non-zero index < 127, just a single sub-index byte is required
@@ -946,9 +1003,9 @@ int dwt_readfromdevice
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_read32bitoffsetreg()
+ * @fn dwt_read32bitoffsetreg()
  *
- * Description:  this function is used to read 32-bit value from the DW1000 device registers
+ * @brief  this function is used to read 32-bit value from the DW1000 device registers
  *
  * input parameters:
  * @param regFileID - ID of register file or buffer being accessed
@@ -958,6 +1015,7 @@ int dwt_readfromdevice
  *
  * returns 32 bit register value (success), or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 uint32 dwt_read32bitoffsetreg(int regFileID,int regOffset)
 {
     uint32  regval = DWT_ERROR ;
@@ -978,9 +1036,9 @@ uint32 dwt_read32bitoffsetreg(int regFileID,int regOffset)
 } // end dwt_read32bitoffsetreg()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_read16bitoffsetreg()
+ * @fn dwt_read16bitoffsetreg()
  *
- * Description:  this function is used to read 16-bit value from the DW1000 device registers
+ * @brief  this function is used to read 16-bit value from the DW1000 device registers
  *
  * input parameters:
  * @param regFileID - ID of register file or buffer being accessed
@@ -990,6 +1048,7 @@ uint32 dwt_read32bitoffsetreg(int regFileID,int regOffset)
  *
  * returns 16 bit register value (success), or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 uint16 dwt_read16bitoffsetreg(int regFileID,int regOffset)
 {
     uint16  regval = DWT_ERROR ;
@@ -1006,9 +1065,9 @@ uint16 dwt_read16bitoffsetreg(int regFileID,int regOffset)
 } // end dwt_read16bitoffsetreg()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_write16bitoffsetreg()
+ * @fn dwt_write16bitoffsetreg()
  *
- * Description:  this function is used to write 16-bit value to the DW1000 device registers
+ * @brief  this function is used to write 16-bit value to the DW1000 device registers
  *
  * input parameters:
  * @param regFileID - ID of register file or buffer being accessed
@@ -1019,6 +1078,7 @@ uint16 dwt_read16bitoffsetreg(int regFileID,int regOffset)
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 int dwt_write16bitoffsetreg(int regFileID,int regOffset,uint16 regval)
 {
     int reg;
@@ -1034,9 +1094,9 @@ int dwt_write16bitoffsetreg(int regFileID,int regOffset,uint16 regval)
 } // end dwt_write16bitoffsetreg()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_write32bitoffsetreg()
+ * @fn dwt_write32bitoffsetreg()
  *
- * Description:  this function is used to write 32-bit value to the DW1000 device registers
+ * @brief  this function is used to write 32-bit value to the DW1000 device registers
  *
  * input parameters:
  * @param regFileID - ID of register file or buffer being accessed
@@ -1047,6 +1107,7 @@ int dwt_write16bitoffsetreg(int regFileID,int regOffset,uint16 regval)
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error
  */
+#pragma GCC optimize ("O3")
 int dwt_write32bitoffsetreg(int regFileID,int regOffset,uint32 regval)
 {
     int     j ;
@@ -1066,9 +1127,9 @@ int dwt_write32bitoffsetreg(int regFileID,int regOffset,uint32 regval)
 } // end dwt_write32bitoffsetreg()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_enableframefilter()
+ * @fn dwt_enableframefilter()
  *
- *  Description: This is used to enable the frame filtering - (the default option is to
+ *  @brief This is used to enable the frame filtering - (the default option is to
  *  accept any data and ack frames with correct destination address
  *
  * input parameters
@@ -1087,25 +1148,27 @@ int dwt_write32bitoffsetreg(int regFileID,int regOffset,uint32 regval)
  */
 void dwt_enableframefilter(uint16 enable)
 {
-    uint32 sysconfig = dwt_read32bitreg(SYS_CFG_ID) ;            // read sysconfig register
+    uint32 sysconfig = SYS_CFG_MASK & dwt_read32bitreg(SYS_CFG_ID) ;    // read sysconfig register
 
     if(enable)
     {
         //enable frame filtering and configure frame types
-        sysconfig &= ~(FF_ALL_EN);   //clear all
-        sysconfig |= (enable & FF_ALL_EN) | SYS_CFG_FF;
+        sysconfig &= ~(SYS_CFG_FF_ALL_EN);   //clear all
+        sysconfig |= (enable & SYS_CFG_FF_ALL_EN) | SYS_CFG_FFE;
     }
     else
-        sysconfig &= ~SYS_CFG_FF;
+    {
+        sysconfig &= ~(SYS_CFG_FFE);
+    }
 
     dw1000local.sysCFGreg = sysconfig ;
     dwt_write32bitreg(SYS_CFG_ID,sysconfig) ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setpanid()
+ * @fn dwt_setpanid()
  *
- *  Description: This is used to set the PAN ID and 16-bit (short) address
+ *  @brief This is used to set the PAN ID and 16-bit (short) address
  *
  *
  * input parameters
@@ -1122,9 +1185,9 @@ void dwt_setpanid(uint16 panID)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setaddress16()
+ * @fn dwt_setaddress16()
  *
- *  Description: This is used to set 16-bit (short) address
+ *  @brief This is used to set 16-bit (short) address
  *
  *
  * input parameters
@@ -1141,9 +1204,9 @@ void dwt_setaddress16(uint16 shortAddress)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_seteui()
+ * @fn dwt_seteui()
  *
- *  Description: This is used to set the EUI 64-bit (long) address
+ *  @brief This is used to set the EUI 64-bit (long) address
  *
  * input parameters
  * @param eui64 - this is the pointer to a buffer that contains the 64bit address
@@ -1159,9 +1222,9 @@ void dwt_seteui(uint8 *eui64)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_geteui()
+ * @fn dwt_geteui()
  *
- *  Description: This is used to get the EUI 64-bit from the DW1000
+ *  @brief This is used to get the EUI 64-bit from the DW1000
  *
  * input parameters
  * @param eui64 - this is the pointer to a buffer that will contain the read 64-bit EUI value
@@ -1176,9 +1239,9 @@ void dwt_geteui(uint8 *eui64)
 }
 
 //
-// _dwt_nvmread - function to read the NVM memory. Ensure that MR,MRa,MRb are reset to 0.
+// _dwt_otpread - function to read the OTP memory. Ensure that MR,MRa,MRb are reset to 0.
 //
-uint32 _dwt_nvmread(uint32 address)
+uint32 _dwt_otpread(uint32 address)
 {
     uint8 buf[4];
     uint32 ret_data;
@@ -1187,34 +1250,30 @@ uint32 _dwt_nvmread(uint32 address)
     buf[0] = address & 0xff;
 
     // Write the address
-    dwt_writetodevice(NVRAM_IF_ID,0x04,2,buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_ADDR,2,buf);
 
-    // Assert NVM Read (self clearing)
-    buf[1] = 0x20; // Enable slow clock
-    buf[0] = 0x03; // 0x02 for auto read, 0x03 for manual drive of NVM_READ
-    dwt_writetodevice(NVRAM_IF_ID,0x06,2,buf);
+    // Assert OTP Read (self clearing)
+    buf[0] = 0x03; // 0x03 for manual drive of OTP_READ
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL,1,buf);
     buf[0] = 0x00; // Bit0 is not autoclearing, so clear it (Bit 1 is but we clear it anyway).
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL,1,buf);
 
-    // Read read data, available 40ns after rising edge of NVM_READ
-    ret_data=dwt_read32bitoffsetreg(NVRAM_IF_ID,0x0A);
+    // Read read data, available 40ns after rising edge of OTP_READ
+    ret_data=dwt_read32bitoffsetreg(OTP_IF_ID,OTP_RDAT);
 
     // Return the 32bit of read data
     return (ret_data);
 }
 
-// nvm_set_mr_regs
 // Configure the MR registers for initial programming (enable charge pump).
 // Read margin is used to stress the read back from the
 // programmed bit. In normal operation this is relaxed.
-uint32 _dwt_nvmsetmrregs(int mode)
+uint32 _dwt_otpsetmrregs(int mode)
 {
     uint8 rd_buf[4];
     uint8 wr_buf[4];
-    uint32 mra,mrb,mr;
-    //printf("NVM SET MR: Setting MR,MRa,MRb for mode %2x\n",mode);
-
-    // For mode we will set the following:
+    uint32 mra=0,mrb=0,mr=0;
+    //printf("OTP SET MR: Setting MR,MRa,MRb for mode %2x\n",mode);
     // For mode we will set the following:
     // "0" : Reset all to 0x0:           MRA=0x0000, MRB=0x0000, MR=0x0000
     // "1" : Set for inital programming: MRA=0x9220, MRB=0x000E, MR=0x1024
@@ -1228,7 +1287,7 @@ uint32 _dwt_nvmsetmrregs(int mode)
     // PROGRAMME MRA
     // Set MRA, MODE_SEL
     wr_buf[0] = 0x03;
-    dwt_writetodevice(NVRAM_IF_ID, 0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL+1,1,wr_buf);
 
     // Load data
     switch(mode&0x0f) {
@@ -1263,141 +1322,137 @@ uint32 _dwt_nvmsetmrregs(int mode)
         mrb=0x0003;
         break;
     default :
-    //  printf("NVM SET MR: ERROR : Invalid mode selected\n",mode);
+    //  printf("OTP SET MR: ERROR : Invalid mode selected\n",mode);
         break;
     }
 
     wr_buf[0] = mra & 0x00ff;
     wr_buf[1] = (mra & 0xff00)>>8;
-    dwt_writetodevice(NVRAM_IF_ID, 0x00,2,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_WDAT,2,wr_buf);
 
 
     // Set WRITE_MR
     wr_buf[0] = 0x08;
-    dwt_writetodevice(NVRAM_IF_ID, 0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
 
     // Wait?
 
     // Set Clear Mode sel
     wr_buf[0] = 0x02;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
 
     // Set AUX update, write MR
     wr_buf[0] = 0x88;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
     // Clear write MR
     wr_buf[0] = 0x80;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
     // Clear AUX update
     wr_buf[0] = 0x00;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
 
     ///////////////////////////////////////////
-    // PROGRAMME MRB
+    // PROGRAM MRB
     // Set SLOW, MRB, MODE_SEL
     wr_buf[0] = 0x05;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
 
     wr_buf[0] = mrb & 0x00ff;
     wr_buf[1] = (mrb & 0xff00)>>8;
-    dwt_writetodevice(NVRAM_IF_ID,0x00,2,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_WDAT,2,wr_buf);
 
     // Set WRITE_MR
     wr_buf[0] = 0x08;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
 
     // Wait?
 
     // Set Clear Mode sel
     wr_buf[0] = 0x04;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
 
     // Set AUX update, write MR
     wr_buf[0] = 0x88;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
     // Clear write MR
     wr_buf[0] = 0x80;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
     // Clear AUX update
     wr_buf[0] = 0x00;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
 
     ///////////////////////////////////////////
-    // PROGRAMME MR
+    // PROGRAM MR
     // Set SLOW, MODE_SEL
     wr_buf[0] = 0x01;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
     // Load data
 
     wr_buf[0] = mr & 0x00ff;
     wr_buf[1] = (mr & 0xff00)>>8;
-    dwt_writetodevice(NVRAM_IF_ID,0x00,2,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_WDAT,2,wr_buf);
 
     // Set WRITE_MR
     wr_buf[0] = 0x08;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
 
     // Wait?
     Sleep(10);
     // Set Clear Mode sel
     wr_buf[0] = 0x00;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
 
     // Read confirm mode writes.
     //Set man override, MRA_SEL
-    wr_buf[0] = 0x01;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    wr_buf[0] = OTP_CTRL_OTPRDEN;
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
     wr_buf[0] = 0x02;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
-    //dwt_readfromdevice(NVRAM_IF_ID,0x0A,4,rd_buf);
-    //printf("NVM READ MR: %02x %02x MRA:%02x %02x\n",rd_buf[3], rd_buf[2], rd_buf[1], rd_buf[0]);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
     //MRB_SEL
     wr_buf[0] = 0x04;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
     Sleep(100);
-    //dwt_readfromdevice(NVRAM_IF_ID,0x0A,4,rd_buf);
-    //printf("NVM READ MR: %02x %02x MRB:%02x %02x\n",rd_buf[3], rd_buf[2], rd_buf[1], rd_buf[0]);
 
     // Clear mode sel
     wr_buf[0] = 0x00;
-    dwt_writetodevice(NVRAM_IF_ID,0x07,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID,OTP_CTRL+1,1,wr_buf);
     // Clear MAN_OVERRIDE
     wr_buf[0] = 0x00;
-    dwt_writetodevice(NVRAM_IF_ID,0x06,1,wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL,1,wr_buf);
 
     Sleep(10);
 
-    if (((mode&0x0f) == 0x1) |((mode&0x0f) == 0x2)) {
+    if (((mode&0x0f) == 0x1)||((mode&0x0f) == 0x2)) 
+	{
         // Read status register
-        dwt_readfromdevice(NVRAM_IF_ID,0x08,1,rd_buf);
+        dwt_readfromdevice(OTP_IF_ID, OTP_STAT,1,rd_buf);
 
-        if((rd_buf[0]&0x02) == 0x02) {
-    //      printf("(Info) NVM PROG 32: Charge Pump OK\n");
+        /*if((rd_buf[0]&0x02) == 0x02) {
+    //      printf("(Info) OTP PROG 32: Charge Pump OK\n");
         } else {
-    //      printf("(Info) NVM PROG 32: Charge Pump Not Ready\n");
-         return 0;
-        }
+    //      printf("(Info) OTP PROG 32: Charge Pump Not Ready\n");
+        }*/
     }
 
-    return 0;
+    return DWT_SUCCESS;
 }
 
 //
-// _dwt_nvmprogword32 - function to program the NVM memory. Ensure that MR,MRa,MRb are reset to 0.
-// VNM Charge pump needs to be enabled(see nvm_set_mr_regs)
+// _dwt_otpprogword32 - function to program the OTP memory. Ensure that MR,MRa,MRb are reset to 0.
+// VNM Charge pump needs to be enabled(see _dwt_otpsetmrregs)
 // Note the address is only 11 bits long.
-uint32 _dwt_nvmprogword32(uint32 data, uint16 address)
+uint32 _dwt_otpprogword32(uint32 data, uint16 address)
 {
     uint8 rd_buf[1];
     uint8 wr_buf[4];
-    uint8 nvm_done;
+    uint8 otp_done;
 
     // Read status register
-    dwt_readfromdevice(NVRAM_IF_ID, 0x08, 1, rd_buf);
+    dwt_readfromdevice(OTP_IF_ID, OTP_STAT, 1, rd_buf);
 
     if((rd_buf[0] & 0x02) != 0x02)
     {
-        printf("NVM PROG 32: ERROR VPP NOT OK, programming will fail. Are MR/MRA/MRB set?\n");
+        printf("OTP PROG 32: ERROR VPP NOT OK, programming will fail. Are MR/MRA/MRB set?\n");
         return DWT_ERROR;
     }
 
@@ -1406,28 +1461,29 @@ uint32 _dwt_nvmprogword32(uint32 data, uint16 address)
     wr_buf[2] = (data>>16) & 0xff;
     wr_buf[1] = (data>>8) & 0xff;
     wr_buf[0] = data & 0xff;
-    dwt_writetodevice(NVRAM_IF_ID, 0x00, 4, wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_WDAT, 4, wr_buf);
 
     // Write the address [10:0]
     wr_buf[1] = (address>>8) & 0x07;
     wr_buf[0] = address & 0xff;
-    dwt_writetodevice(NVRAM_IF_ID, 0x04, 2, wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_ADDR, 2, wr_buf);
 
     // Enable Sequenced programming
-    wr_buf[0] = 0x40;
-    dwt_writetodevice(NVRAM_IF_ID, 0x06, 1, wr_buf);
+    wr_buf[0] = OTP_CTRL_OTPPROG;
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL, 1, wr_buf);
     wr_buf[0] = 0x00; // And clear
-    dwt_writetodevice(NVRAM_IF_ID, 0x06, 1, wr_buf);
+    dwt_writetodevice(OTP_IF_ID, OTP_CTRL, 1, wr_buf);
 
     // WAIT for status to flag PRGM OK..
-    nvm_done = 0;
-    while(nvm_done == 0)
+    otp_done = 0;
+    while(otp_done == 0)
     {
-        dwt_readfromdevice(NVRAM_IF_ID, 0x08, 1, rd_buf);
+		Sleep(1);
+        dwt_readfromdevice(OTP_IF_ID, OTP_STAT, 1, rd_buf);
 
         if((rd_buf[0] & 0x01) == 0x01)
         {
-            nvm_done = 1;
+            otp_done = 1;
         }
     }
 
@@ -1435,9 +1491,9 @@ uint32 _dwt_nvmprogword32(uint32 data, uint16 address)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_otpwriteandverify()
+ * @fn dwt_otpwriteandverify()
  *
- *  Description: This is used to program 32-bit value into the DW1000 OTP memory.
+ *  @brief This is used to program 32-bit value into the DW1000 OTP memory.
  *
  * input parameters
  * @param value - this is the 32-bit value to be progarmmed into OTP
@@ -1459,14 +1515,14 @@ uint32 dwt_otpwriteandverify(uint32 value, uint16 address)
     //Set the supply to 3.7V
     //
 
-    _dwt_nvmsetmrregs(1); //set mode for programming
+    _dwt_otpsetmrregs(1); //set mode for programming
 
     //for each value to program - the readback/chack is done couple of times to verify it has programmed successfully
     while(prog_ok==0)
     {
-        _dwt_nvmprogword32(value, address);
+        _dwt_otpprogword32(value, address);
 
-        if(_dwt_nvmread(address) == value)
+        if(_dwt_otpread(address) == value)
         {
             prog_ok = 1;
         }
@@ -1477,16 +1533,16 @@ uint32 dwt_otpwriteandverify(uint32 value, uint16 address)
 
     //even if the above does not exit before retry reaches 5, the programming has probably been sucessful
 
-    _dwt_nvmsetmrregs(4); //set mode for reading
+    _dwt_otpsetmrregs(4); //set mode for reading
 
-    if(_dwt_nvmread(address) == value)   //if this does not pass please check voltage supply on VDDIO
+    if(_dwt_otpread(address) == value)   //if this does not pass please check voltage supply on VDDIO
     {
         prog_ok = DWT_SUCCESS;
     }
     else
         prog_ok = DWT_ERROR;
 
-    _dwt_nvmsetmrregs(0); //setting NVM mode register for low RM read - resetting the device would be alternative
+    _dwt_otpsetmrregs(0); //setting OTP mode register for low RM read - resetting the device would be alternative
 
     return prog_ok;
 }
@@ -1497,9 +1553,9 @@ void _dwt_aonconfigupload(void)
 
     // Upload array
     buf[0] = 0x04;
-    dwt_writetodevice(AON_ID,0x02,1,buf);
+    dwt_writetodevice(AON_ID,AON_CTRL_OFFSET,1,buf);
     buf[0] = 0x00;
-    dwt_writetodevice(AON_ID,0x02,1,buf);
+    dwt_writetodevice(AON_ID,AON_CTRL_OFFSET,1,buf);
 }
 
 // upload always on array configuration and go to sleep
@@ -1509,16 +1565,16 @@ void _dwt_aonarrayupload(void)
 
     // Upload array
     buf[0] = 0x00;
-    dwt_writetodevice(AON_ID,0x02,1,buf);
+    dwt_writetodevice(AON_ID,AON_CTRL_OFFSET,1,buf);
     buf[0] = 0x02;
-    dwt_writetodevice(AON_ID,0x02,1,buf);
+    dwt_writetodevice(AON_ID,AON_CTRL_OFFSET,1,buf);
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_entersleep()
+ * @fn dwt_entersleep()
  *
- *  Description: This function puts the device into deep sleep or sleep.  dwt_configuredeepsleep should be called first
+ *  @brief This function puts the device into deep sleep or sleep.  dwt_configuredeepsleep should be called first
  *  to configure the sleep and on-wake/wakeup parameters
  *
  *  input parameters
@@ -1534,9 +1590,9 @@ void dwt_entersleep(void)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configuresleepcnt()
+ * @fn dwt_configuresleepcnt()
  *
- * Description: sets the sleep counter to new value, this function programs the high 16-bits of the 28-bit counter
+ * @brief sets the sleep counter to new value, this function programs the high 16-bits of the 28-bit counter
  *
  * NOTE: this function needs to be run before dwt_configuresleep, also the SPI freq has to be < 3MHz
  *
@@ -1552,36 +1608,36 @@ void dwt_configuresleepcnt(uint16 sleepcnt)
     uint8 buf[2];
 
     buf[0] = 0x01;
-    dwt_writetodevice(PMSC_ID,0x00,1,buf);
+    dwt_writetodevice(PMSC_ID,PMSC_CTRL0_OFFSET,1,buf);
 
     buf[0] = 0;
-    dwt_writetodevice(AON_ID, 0x6, 1, buf); //to make sure we don't accidentaly go to sleep
+    dwt_writetodevice(AON_ID, AON_CFG0_OFFSET, 1, buf); //to make sure we don't accidentaly go to sleep
 
     buf[0] = 0;
-    dwt_writetodevice(AON_ID, 0xA, 1, buf);
+    dwt_writetodevice(AON_ID, AON_CFG1_OFFSET, 1, buf);
     //disable the sleep counter
     _dwt_aonconfigupload();
 
     //set new value
     buf[0] = sleepcnt & 0xFF;
     buf[1] = (sleepcnt >> 8) & 0xFF;
-    dwt_writetodevice(AON_ID, 0x8, 2, buf);
+    dwt_writetodevice(AON_ID, (AON_CFG0_OFFSET+2) , 2, buf);
     _dwt_aonconfigupload();
 
     //enable the sleep counter
     buf[0] = 1;
-    dwt_writetodevice(AON_ID, 0xA, 1, buf);
+    dwt_writetodevice(AON_ID, AON_CFG1_OFFSET, 1, buf);
     _dwt_aonconfigupload();
 
     buf[0] = 0x00;
-    dwt_writetodevice(PMSC_ID,0x00,1,buf);
+    dwt_writetodevice(PMSC_ID,PMSC_CTRL0_OFFSET,1,buf);
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_calibratesleepcnt()
+ * @fn dwt_calibratesleepcnt()
  *
- * Description: calibrates the local oscillator as its frequency can vary between 7 and 13kHz depending on temp and voltage
+ * @brief calibrates the local oscillator as its frequency can vary between 7 and 13kHz depending on temp and voltage
  *
  * NOTE: this function needs to be run before dwt_configuresleepcnt, so that we know what the counter units are
  * returns the number of XTAL/2 cycles per low-power oscillator cycle
@@ -1601,57 +1657,57 @@ uint16 dwt_calibratesleepcnt(void)
 
     //enable cal of the sleep counter
     buf[0] = 4;
-    dwt_writetodevice(AON_ID, 0xA, 1, buf);
+    dwt_writetodevice(AON_ID, AON_CFG1_OFFSET, 1, buf);
     _dwt_aonconfigupload();
 
     //disables the cal of the sleep counter
     buf[0] = 0;
-    dwt_writetodevice(AON_ID, 0xA, 1, buf);
+    dwt_writetodevice(AON_ID, AON_CFG1_OFFSET, 1, buf);
     _dwt_aonconfigupload();
 
     buf[0] = 0x01;
-    dwt_writetodevice(PMSC_ID,0x00,1,buf);
+    dwt_writetodevice(PMSC_ID,PMSC_CTRL0_OFFSET,1,buf);
     Sleep(1);
 
     //read the number of XTAL/2 cycles one lposc cycle took.
     // Set up address
     buf[0] = 118;
-    dwt_writetodevice(AON_ID,0x04,1,buf);
+    dwt_writetodevice(AON_ID, AON_ADDR_OFFSET, 1,buf);
 
      // Enable manual override
     buf[0] = 0x80; // OVR EN
-    dwt_writetodevice(AON_ID,0x2,1,buf);
+    dwt_writetodevice(AON_ID, AON_CTRL_OFFSET, 1,buf);
 
     // Read confirm data that was written
     buf[0] = 0x88; // OVR EN, OVR_RD
-    dwt_writetodevice(AON_ID,0x2,1,buf);
+    dwt_writetodevice(AON_ID, AON_CTRL_OFFSET, 1,buf);
 
     // Read back byte from AON
-    dwt_readfromdevice(AON_ID,3,1,buf);
+    dwt_readfromdevice(AON_ID, AON_RDAT_OFFSET, 1,buf);
     result = buf[0];
     result = result << 8;
 
     // Set up address
     buf[0] = 117;
-    dwt_writetodevice(AON_ID,0x04,1,buf);
+    dwt_writetodevice(AON_ID, AON_ADDR_OFFSET, 1,buf);
 
      // Enable manual override
     buf[0] = 0x80; // OVR EN
-    dwt_writetodevice(AON_ID,0x2,1,buf);
+    dwt_writetodevice(AON_ID, AON_CTRL_OFFSET, 1,buf);
 
     // Read confirm data that was written
     buf[0] = 0x88; // OVR EN, OVR_RD
-    dwt_writetodevice(AON_ID,0x2,1,buf);
+    dwt_writetodevice(AON_ID, AON_CTRL_OFFSET, 1,buf);
 
     // Read back byte from AON
-    dwt_readfromdevice(AON_ID,3,1,buf);
+    dwt_readfromdevice(AON_ID, AON_RDAT_OFFSET, 1,buf);
     result |= buf[0];
 
     buf[0] = 0x00; // Disable OVR EN
-    dwt_writetodevice(AON_ID,0x2,1,buf);
+    dwt_writetodevice(AON_ID,AON_CTRL_OFFSET,1,buf);
 
     buf[0] = 0x00;
-    dwt_writetodevice(PMSC_ID,0x00,1,buf);
+    dwt_writetodevice(PMSC_ID,PMSC_CTRL0_OFFSET,1,buf);
 
     //returns the number of XTAL/2 cycles per one LP OSC cycle
     //this can be converted into LP OSC freq by 19.2MHz/result
@@ -1660,17 +1716,17 @@ uint16 dwt_calibratesleepcnt(void)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configuresleep()
+ * @fn dwt_configuresleep()
  *
- *  Description: configures the device for both DEEP_SLEEP and SLEEP modes, and on-wake mode
+ *  @brief configures the device for both DEEP_SLEEP and SLEEP modes, and on-wake mode
  *  I.e. before entering the sleep, the device should be programmed for TX or RX, then upon "waking up" the TX/RX settings
  *  will be preserved and the device can immediately perform the desired action TX/RX
  *
  * NOTE: e.g. MP :- Tag operation - after deep sleep, the device needs to just load the TX buffer and send the frame
  *
  *
- *      mode: the array and LDE code (NV RAM) and LDO tune, and set sleep persist
- *      DWT_LOADUCODE    0x800 - load ucode from NVMEM
+ *      mode: the array and LDE code (OTP/ROM) and LDO tune, and set sleep persist
+ *      DWT_LOADUCODE    0x800 - load ucode from OTP
  *      DWT_PRESRV_SLEEP 0x100 - preserve sleep
  *      DWT_LOADOPSET    0x080 - load operating parameter set on wakeup
  *      DWT_CONFIG       0x040 - download the AON array into the HIF (configuration download)
@@ -1679,7 +1735,7 @@ uint16 dwt_calibratesleepcnt(void)
  *      DWT_TANDV        0x001
  *
  *      wake: wake up parameters
- *		DWT_XTAL_EN		 0x10 - keep XTAL running during sleep 
+ *      DWT_XTAL_EN      0x10 - keep XTAL running during sleep
  *      DWT_WAKE_SLPCNT  0x8 - wake up after sleep count
  *      DWT_WAKE_CS      0x4 - wake up on chip select
  *      DWT_WAKE_WK      0x2 - wake up on WAKEUP PIN
@@ -1697,18 +1753,18 @@ void dwt_configuresleep(uint16 mode, uint8 wake)
 {
     uint8 buf[1];
 
-    dwt_write16bitoffsetreg(AON_ID, 0x00, mode);
+    dwt_write16bitoffsetreg(AON_ID, AON_WCFG_OFFSET, mode);
 
     buf[0] = wake;
 
-    dwt_writetodevice(AON_ID, 0x06, 1, buf);
+    dwt_writetodevice(AON_ID, AON_CFG0_OFFSET, 1, buf);
 
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_entersleepaftertx(int enable)
+ * @fn dwt_entersleepaftertx(int enable)
  *
- *  Description: sets the auto TX to sleep bit. This means that after a frame
+ *  @brief sets the auto TX to sleep bit. This means that after a frame
  *  transmission the device will enter deep sleep mode. The dwt_setdeepsleep() function
  *  needs to be called before this to configure the on-wake settings
  *
@@ -1723,21 +1779,21 @@ void dwt_configuresleep(uint16 mode, uint8 wake)
  */
 void dwt_entersleepaftertx(int enable)
 {
-    uint32 reg = dwt_read32bitoffsetreg(PMSC_ID, 0x4);
+    uint32 reg = dwt_read32bitoffsetreg(PMSC_ID, PMSC_CTRL1_OFFSET);
     //set the auto TX -> sleep bit
     if(enable)
         reg |= 0x800;
     else
         reg &= ~(0x800);
 
-    dwt_write32bitoffsetreg(PMSC_ID, 0x4, reg);
+    dwt_write32bitoffsetreg(PMSC_ID, PMSC_CTRL1_OFFSET, reg);
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_spicswakeup()
+ * @fn dwt_spicswakeup()
  *
- * Description: wake up the device from sleep mode using the SPI read,
+ * @brief wake up the device from sleep mode using the SPI read,
  * the device will wake up on chip slect line going low if the line is held low for at least 600us
  * NOTE: Alternatively the device can be woken up with WaKE_UP pin if configured for that operation
  *
@@ -1774,9 +1830,9 @@ int dwt_spicswakeup(uint8 *buff, uint16 length)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: _dwt_configlde()
+ * @fn _dwt_configlde()
  *
- * Description: configure LDE algorithm parameters
+ * @brief configure LDE algorithm parameters
  *
  * input parameters
  * @param prf   -   this is the PRF index (0 or 1) 0 correcpods to 16 and 1 to 64 PRF
@@ -1789,20 +1845,20 @@ void _dwt_configlde(int prfIndex)
 {
     uint8 x = LDE_PARAM1;
 
-    dwt_writetodevice( LDE_CFG_STS_ID, 0x806, 1, &x );
+    dwt_writetodevice( LDE_IF_ID, LDE_CFG1_OFFSET, 1, &x ); /*8-bit configuration register*/
 
-    if(prfIndex)
-        dwt_write16bitoffsetreg( LDE_CFG_STS_ID, 0x1806, (uint16) LDE_PARAM3_64);
-    else
-        dwt_write16bitoffsetreg( LDE_CFG_STS_ID, 0x1806, (uint16) LDE_PARAM3_16);
-
+    if(prfIndex) {
+        dwt_write16bitoffsetreg( LDE_IF_ID, LDE_CFG2_OFFSET, (uint16) LDE_PARAM3_64); /* 16-bit LDE configuration tuning register */
+    }else{
+        dwt_write16bitoffsetreg( LDE_IF_ID, LDE_CFG2_OFFSET, (uint16) LDE_PARAM3_16);
+    }
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: _dwt_loaducodefromrom()
+ * @fn _dwt_loaducodefromrom()
  *
- * Description:  load ucode from OTP MEMORY or ROM
+ * @brief  load ucode from OTP MEMORY or ROM
  *
  * input parameters
  *
@@ -1812,30 +1868,29 @@ void _dwt_configlde(int prfIndex)
  */
 int _dwt_loaducodefromrom(void)
 {
-    uint32 reg = dwt_read32bitoffsetreg(NVRAM_IF_ID, 0x6);
     uint8 wr_buf[2];
 
     //set up clocks
-    wr_buf[1] = 0x23;
-    wr_buf[0] = 0x11;
-    dwt_writetodevice(PMSC_ID, 0x0, 2, wr_buf);
+    wr_buf[1] = 0x03;
+    wr_buf[0] = 0x01;
+    dwt_writetodevice(PMSC_ID, PMSC_CTRL0_OFFSET, 2, wr_buf);
     //kick off the NV MEM load
-    dwt_write32bitoffsetreg(NVRAM_IF_ID, 0x6, reg | LDE_LOAD_BIT); // set load LDE kick bit
+    dwt_write32bitoffsetreg(OTP_IF_ID, OTP_CTRL, OTP_CTRL_LDELOAD); // set load LDE kick bit
 
     Sleep(1); // Allow time for code to upload (should take up to 120 us)
 
     //default clocks
     wr_buf[1] = 0x02;
     wr_buf[0] = 0x00;
-    dwt_writetodevice(PMSC_ID, 0x0, 2, wr_buf);
+    dwt_writetodevice(PMSC_ID, PMSC_CTRL0_OFFSET, 2, wr_buf);
 
     return DWT_SUCCESS ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_loadopsettabfromotp()
+ * @fn dwt_loadopsettabfromotp()
  *
- *  Description: This is used to select which Operational Parameter Set table to load from OTP memory
+ *  @brief This is used to select which Operational Parameter Set table to load from OTP memory
  *
  * input parameters
  * @param - opset table selection
@@ -1844,37 +1899,36 @@ int _dwt_loaducodefromrom(void)
  *
  * no return value
  */
-int dwt_loadopsettabfromotp(uint8 gtab_sel)
+void dwt_loadopsettabfromotp(uint8 gtab_sel)
 {
     uint8 wr_buf[2];
     uint16 reg = (((gtab_sel & 0x3) << 5) | 0x1);
     //set up clocks
-    wr_buf[1] = 0x23;
-    wr_buf[0] = 0x11;
-    dwt_writetodevice(PMSC_ID, 0x0, 2, wr_buf);
+    wr_buf[1] = 0x03;
+    wr_buf[0] = 0x01;
+    dwt_writetodevice(PMSC_ID, PMSC_CTRL0_OFFSET, 2, wr_buf);
 
-    dwt_write16bitoffsetreg(NVRAM_IF_ID, 0x12, reg); // set load gtab kick bit (bit0) and gtab selection bit
+    dwt_write16bitoffsetreg(OTP_IF_ID, OTP_SF, reg); // set load gtab kick bit (bit0) and gtab selection bit
 
     //default clocks
     wr_buf[1] = 0x02;
     wr_buf[0] = 0x00;
-    dwt_writetodevice(PMSC_ID, 0x0, 2, wr_buf);
+    dwt_writetodevice(PMSC_ID, PMSC_CTRL0_OFFSET, 2, wr_buf);
 
-    return DWT_SUCCESS ;
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setsmarttxpower()
+ * @fn dwt_setsmarttxpower()
  *
- * Description: This call enables or disables the smart TX power feature.
+ * @brief This call enables or disables the smart TX power feature.
  *
  * input parameters
  * @param enable - this enables or disables the TX smart power (1 = enable, 0 = disable)
  *
  * output parameters
  *
- * returns
+ * no return value
  */
 void dwt_setsmarttxpower(int enable)
 {
@@ -1882,19 +1936,20 @@ void dwt_setsmarttxpower(int enable)
     dw1000local.sysCFGreg = dwt_read32bitreg(SYS_CFG_ID) ;            // read sysconfig register
 
     //disable smart power configuration
-    if(enable)
-        dw1000local.sysCFGreg &= ~SYS_CFG_DIS_SMART_TXP ;
-    else
-        dw1000local.sysCFGreg |= SYS_CFG_DIS_SMART_TXP ;
+    if(enable) {
+        dw1000local.sysCFGreg &= ~(SYS_CFG_DIS_STXP) ;
+    } else {
+        dw1000local.sysCFGreg |= SYS_CFG_DIS_STXP ;
+    }
 
     dwt_write32bitreg(SYS_CFG_ID,dw1000local.sysCFGreg) ;
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_enableautoack()
+ * @fn dwt_enableautoack()
  *
- *  Description: This call enables the auto-ACK feature. If the responseDelayTime (paramter) is 0, the ACK will be sent a.s.a.p.
+ *  @brief This call enables the auto-ACK feature. If the responseDelayTime (paramter) is 0, the ACK will be sent a.s.a.p.
  *  otherwise it will be sent with a programmed delay (in symbols), max is 255.
  *
  * input parameters
@@ -1907,17 +1962,17 @@ void dwt_setsmarttxpower(int enable)
 void dwt_enableautoack(uint8 responseDelayTime)
 {
     //enable auto ACK - needs to have frame filtering enabled as well
-    dw1000local.sysCFGreg |= SYS_CFG_AUTACK;
+    dw1000local.sysCFGreg |= SYS_CFG_AUTOACK;
     // auto ACK reply delay
-    dwt_write16bitoffsetreg(ACK_RESP_ID, 0x2, (responseDelayTime << 8)) ; //in symbols
+    dwt_write16bitoffsetreg(ACK_RESP_T_ID, 0x2, (responseDelayTime << 8) ) ; //in symbols
 
     dwt_write32bitreg(SYS_CFG_ID,dw1000local.sysCFGreg) ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setdblrxbuffmode()
+ * @fn dwt_setdblrxbuffmode()
  *
- *  Description: This call enables the double receive buffer mode
+ *  @brief This call enables the double receive buffer mode
  *
  * input parameters
  * @param enable - 1 to enable, 0 to disable the double buffer mode
@@ -1945,9 +2000,9 @@ void dwt_setdblrxbuffmode(int enable)
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setautorxreenable()
+ * @fn dwt_setautorxreenable()
  *
- *  Description: This call enables the auto rx re-enable feature
+ *  @brief This call enables the auto rx re-enable feature
  *
  * input parameters
  * @param enable - 1 to enable, 0 to disable the feature
@@ -1958,9 +2013,14 @@ void dwt_setdblrxbuffmode(int enable)
  */
 void dwt_setautorxreenable(int enable)
 {
+	uint8 byte = 0;
+	
+	dw1000local.sysCFGreg &= ~SYS_CFG_RXAUTR;
+
     if(enable)
     {
         //enable auto re-enable of the receiver
+		byte |= SYS_CFG_RXAUTR >> 24;
         dw1000local.sysCFGreg |= SYS_CFG_RXAUTR;
     }
     else
@@ -1969,13 +2029,13 @@ void dwt_setautorxreenable(int enable)
         dw1000local.sysCFGreg &= ~SYS_CFG_RXAUTR;
     }
 
-    dwt_write32bitreg(SYS_CFG_ID, dw1000local.sysCFGreg) ;
+    dwt_writetodevice(SYS_CFG_ID, 3, 1, &byte) ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setrxaftertxdelay()
+ * @fn dwt_setrxaftertxdelay()
  *
- *  Description: This sets the receiver turnon delay time after a transmission of a frame
+ *  @brief This sets the receiver turnon delay time after a transmission of a frame
  *
  * input parameters
  * @param rxDelayTime - (20 bits) - the delay is in micro seconds
@@ -1986,19 +2046,19 @@ void dwt_setautorxreenable(int enable)
  */
 void dwt_setrxaftertxdelay(uint32 rxDelayTime)
 {
-    uint32 val = dwt_read32bitreg(ACK_RESP_ID) ;          // read ACK_RESP_ID register
+    uint32 val = dwt_read32bitreg(ACK_RESP_T_ID) ;          // read ACK_RESP_T_ID register
 
-    val &= 0xFFF00000 ; //clear the timer (19:0)
+    val &= ~(ACK_RESP_T_W4R_TIM_MASK) ; //clear the timer (19:0)
 
-    val |= rxDelayTime & 0xFFFFF; //in usec (turn the receiver 20us after TX)
+    val |= (rxDelayTime & ACK_RESP_T_W4R_TIM_MASK) ; //in usec (e.g. turn the receiver 20us after TX)
 
-    dwt_write32bitreg(ACK_RESP_ID, val) ;
+    dwt_write32bitreg(ACK_RESP_T_ID, val) ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setcallbacks()
+ * @fn dwt_setcallbacks()
  *
- *  Description: This is the devices interrupt handler function, it will process/report status events
+ *  @brief This is the devices interrupt handler function, it will process/report status events
  *
  * input parameters
  * @param txcallback - the pointer to the TX callback function
@@ -2015,10 +2075,17 @@ void dwt_setcallbacks(void (*txcallback)(const dwt_callback_data_t *), void (*rx
     dw1000local.dwt_rxcallback = rxcallback;
 }
 
+uint8 dwt_checkIRQ(void) {
+	uint8 temp;
+
+	dwt_readfromdevice(SYS_STATUS_ID, 0, 1, &temp);
+	return (temp & 0x1);
+}
+
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_isr()
+ * @fn dwt_isr()
  *
- * Description: This is the devices interrupt handler function, it will process/report status events
+ * @brief This is the devices interrupt handler function, it will process/report status events
  * Notes:  In PC based system using (Cheetah or ARM) USB to SPI converter there can be no interrupts, however we still need something
  *         to take the place of it and operate in a polled way.
  *         In an embedded system this function should be configured to launch on an interrupt, then it will process the interrupt trigger event and
@@ -2031,18 +2098,22 @@ void dwt_setcallbacks(void (*txcallback)(const dwt_callback_data_t *), void (*rx
  *
  * no return value
  */
+#define DEBUGx 0
+
 void dwt_isr(void) // assume interrupt can supply context
 {
     uint32  status = 0;
-    //uint32 status1 = 0;
-    //uint32 states = 0;
-    //uint32 states1 = 0;
     uint32  clear = 0; // will clear any events seen
-    //uint8 buffer[2];
 
+#if (DEBUGx==1)
+    uint32 status1 = 0;
+    uint32 states = 0;
+    uint32 states1 = 0;
+    uint8 buffer[2] = {0, 0};
+#endif
     dw1000local.cdata.event = 0;
 
-    status = dwt_read32bitreg(SY_STAT_ID) ;            // read status register
+    status = dwt_read32bitreg(SYS_STATUS_ID) ;            // read status register low 32bit
 
     //NOTES:
     //1. TX Event - if DWT_INT_TFRS is enabled, then when the frame has completed transmission the interrupt will be triggered.
@@ -2053,71 +2124,192 @@ void dwt_isr(void) // assume interrupt can supply context
     //
     //2.a. RX Event - This is same as 2. above except this time the received frame has ACK request bit set in the header (AAT bit will be set).
     //     This function will clear the rx event and call the dwt_rxcallback function, notifying the application that ACK req is set.
-    //     If using auto-ACK, the AAT indicates that ACK frame is in progress. Once the ACK has been sent the TXFRS bit will be set and Tx event triggered.
-    //     If the auto-ACK is not enabled, the application can format and start transmission of own ACK frame.
-    //
+    //     If using auto-ACK, the AAT indicates that ACK frame transmission is in progress. Once the ACK has been sent the TXFRS bit will be set and TX event triggered.
+    //     If the auto-ACK is not enabled, the application can format/configure and start transmission of its own ACK frame.
     //
 
-
+#if (DEBUGx==1)
     //DEBUG ----- DEBUG ----- DEBUG -----
-    //status1 = dwt_read32bitoffsetreg(SY_STAT_ID, 1) ;            // read status register
-    //dwt_readfromdevice(RX_BUFFER_ID,0,2,buffer) ;
-    //printf("status %02X%08X, byte 0 %02X%02X\n", status1>>24, status, buffer[0], buffer[1]);
-    //states = dwt_read32bitreg(0x19) ;            // read status register
-    //states1 = dwt_read32bitoffsetreg(0x19, 1) ;            // read status register
-    //printf("states %02X%08X\n", states1>>24, states);
+    status1 = dwt_read32bitoffsetreg(SYS_STATUS_ID, 1) ;            // read status register
+    dwt_readfromdevice(RX_BUFFER_ID,0,2,buffer) ;
+    printf("status %02X%08X, byte 0 %02X%02X\n", status1>>24, status, buffer[0], buffer[1]);
+    states = dwt_read32bitreg(0x19) ;            // read status register
+    states1 = dwt_read32bitoffsetreg(0x19, 1) ;            // read status register
+    printf("states %02X%08X\n", states1>>24, states);
+#endif
+
+	//fix for bug 622 - LDE done flag gets latched on a bad frame
+	if((status & SYS_STATUS_LDEDONE) && (dw1000local.dblbuffon == 0))
+	if((status & (SYS_STATUS_LDEDONE | SYS_STATUS_RXPHD | SYS_STATUS_RXSFDD)) != (SYS_STATUS_LDEDONE | SYS_STATUS_RXPHD | SYS_STATUS_RXSFDD))
+	{
+		
+		//got LDE done but other flags SFD and PHR are clear - this is a bad frame - reset the transceiver
+		dwt_forcetrxoff(); //this will clear all events
+		
+		dwt_rxreset();		
+		//leave any TX events for processing (e.g. if we TX a frame, and then enable rx, 
+		//we can get into here before the TX frame done has been processed, when we are polling (i.e. slow to process the TX)
+		status &= CLEAR_ALLTX_EVENTS;
+		//re-enable the receiver - if auto rx re-enable set
+		if(dw1000local.sysCFGreg & SYS_CFG_RXAUTR)
+		{
+			dwt_write16bitoffsetreg(SYS_CTRL_ID,0,(uint16)SYS_CTRL_RXENAB) ;
+		}
+		else
+		{
+			dw1000local.cdata.event = DWT_SIG_RX_ERROR  ;
+
+			if(dw1000local.dwt_rxcallback != NULL)
+				dw1000local.dwt_rxcallback(&dw1000local.cdata);
+		}
+	}
 
 
     //
     // 1st check for RX frame received or RX timeout and if so call the rx callback function
     //
-    if (status & SY_STAT_RFCG)  // Receiver FCS Good
-    {
-        // read frame info
-        uint16 len = dwt_read32bitreg(RX_FINFO_ID) & 0x3FF;
+    if(status & SYS_STATUS_RXFCG)
+		{
+		if(status & SYS_STATUS_LDEDONE)  // Receiver FCS Good
+			{ 
+			// bug 634 - overrun overwrites the frame info data... so both frames should be discarded
+			// read frame info and other registers and check for overflow again
+			// if overflow set then discard both frames... 
+				
+			uint16 len = 0;
 
-        if (dw1000local.longFrames==0)
-        {
-            len &= 0x7F ;
-        }
+			if (status & SYS_STATUS_RXOVRR) //both HS and RS pointers point to the same buffer
+			{ 
+				//when the overrun happens the frame info data of the buffer A (which contains the older frame e.g. seq. num = x) 
+				//will be corrupted with the latest frame (seq. num = x + 2) data, both the host and IC are pointing to buffer A
+				dwt_forcetrxoff();
+				
+				dwt_rxreset();	
 
-        // STD frame length up to 127, extended frame length up to 1023 bytes
-        dw1000local.cdata.datalength = len ;
+				if(dw1000local.sysCFGreg & SYS_CFG_RXAUTR) //re-enable RX
+				{ 
+					dwt_write16bitoffsetreg(SYS_CTRL_ID,0,(uint16)SYS_CTRL_RXENAB) ;
+				}
+				else
+				{
+					dw1000local.cdata.event = DWT_SIG_RX_ERROR  ;
 
-        //clear all receive status bits (as we are finished with this receive event)
-        clear |= status & CLEAR_ALLRXGOOD_EVENTS  ;
-        dwt_write32bitreg(SY_STAT_ID,clear) ;         // write status register to clear event bits we have seen
-        //NOTE: clear the event which caused interrupt means once the rx is enabled or tx is started
-        //new events can trigger and give rise to new interrupts
+					if(dw1000local.dwt_rxcallback != NULL)
+						dw1000local.dwt_rxcallback(&dw1000local.cdata);
+				}
 
-        dw1000local.cdata.event = DWT_SIG_RX_OKAY ;
-        dw1000local.cdata.aatset = (status & SY_STAT_TFAA) ; //ACK request is set
+				return;
+		}
+		
 
-        //call the RX call-back function to process the RX event
-        if(dw1000local.dwt_rxcallback != NULL)
-            dw1000local.dwt_rxcallback(&dw1000local.cdata);
+		{
+			
+			len = dwt_read16bitoffsetreg(RX_FINFO_ID, 0) & 0x3FF;
+	        dwt_readfromdevice(RX_BUFFER_ID,0,2,dw1000local.cdata.fctrl) ;
+	        if (dw1000local.longFrames==0)
+	        {
+	            len &= 0x7F ;
+	        }
+	
+	        // STD frame length up to 127, extended frame length up to 1023 bytes
+	        dw1000local.cdata.datalength = len ;
+	
+	        //bug 627 workaround - clear the AAT bit if the ACK request bit in the FC is not set
+	        if((status & SYS_STATUS_AAT) //AAT bit is set (ACK has been requested)
+	            && (((dw1000local.cdata.fctrl[0] & 0x20) == 0) || (dw1000local.cdata.fctrl[0] == 0x02)) //but the data frame has it clear or it is an ACK frame
+	            )
+	        {
+	            clear |= SYS_STATUS_AAT ;
+	            dw1000local.cdata.aatset = 0 ; //ACK request is not set
+	            dw1000local.wait4resp = 0;
+	        }
+	        else //the AAT is correctly set for a frame that requested the ACK
+	        {
+					dw1000local.cdata.aatset = (status & SYS_STATUS_AAT) ; //check if ACK request is set
+	        }
+	
+			dw1000local.cdata.event = DWT_SIG_RX_OKAY ;
 
-        if(dw1000local.dblbuffon) //double RX buffer is enabled - toggle the host side pointer
-        {
-            uint8 hsrb = 0x1 ;
-            //toggle the host side Receive Buffer Pointer by writing one to the register
-            dwt_writetodevice(SYS_CTRL_ID, 3, 1, &hsrb) ;       // we need to swap rx buffer status reg (write one to toggle internally)
-        }
+			if(dw1000local.dblbuffon == 0)
+			{
+	        //clear all receive status bits (as we are finished with this receive event)
+	        clear |= status & CLEAR_ALLRXGOOD_EVENTS  ;
+	        dwt_write32bitreg(SYS_STATUS_ID,clear) ;         // write status register to clear event bits we have seen
 
+	        //NOTE: clear the event which caused interrupt means once the rx is enabled or tx is started
+	        //new events can trigger and give rise to new interrupts
+	        //call the RX call-back function to process the RX event
+	        if(dw1000local.dwt_rxcallback != NULL)
+	            dw1000local.dwt_rxcallback(&dw1000local.cdata);
+				}
+				else //double buffer
+	        {
+					uint8  buff ;
+	            uint8 hsrb = 0x01 ;
+
+					//need to make sure that the host/IC buffer pointers are aligned before starting RX
+					dwt_readfromdevice(SYS_STATUS_ID, 3, 1, &buff);
+					if((buff & (SYS_STATUS_ICRBP>>24) ) ==              /* IC side Receive Buffer Pointer */
+					((buff & (SYS_STATUS_HSRBP>>24) ) << 1) )   /* Host Side Receive Buffer Pointer */			
+					{
+						//clear all receive status bits (as we are finished with this receive event)
+						clear |= status & CLEAR_DBLBUFF_EVENTS  ;
+						dwt_write32bitreg(SYS_STATUS_ID,clear) ;         // write status register to clear event bits we have seen
+					}
+					//if they are not aligned then there is a new frame in the other buffer, so we just need to toggle...
+
+					//call the RX call-back function to process the RX event
+					if(dw1000local.dwt_rxcallback != NULL)
+						dw1000local.dwt_rxcallback(&dw1000local.cdata);
+
+					if(dwt_checkoverrun())
+				{
+	            	//toggle the host side Receive Buffer Pointer by writing one to the register
+	            	dwt_writetodevice(SYS_CTRL_ID, SYS_CTRL_HRBT_OFFSET, 1, &hsrb) ;       // we need to swap rx buffer status reg (write one to toggle internally)
+	        	}
+					else
+					{
+						dwt_forcetrxoff();
+
+						dwt_rxreset();	
+
+						if(dw1000local.sysCFGreg & SYS_CFG_RXAUTR) //re-enable RX
+						{
+							dwt_write16bitoffsetreg(SYS_CTRL_ID,0,(uint16)SYS_CTRL_RXENAB) ;
+						}
+					}
+			}
+
+			}
+		} //if LDE_DONE is set (this means we have both SYS_STATUS_RXFCG and SYS_STATUS_LDEDONE)
+		else //no LDE_DONE ? 
+		{
+			//printf("NO LDE done or LDE error\n");
+		}
     } // end if CRC is good
     else
     //
     // Check for TX frame sent event and signal to upper layer.
     //
-    if (status & SY_STAT_TFRS)  // Transmit Frame Sent
+    if (status & SYS_STATUS_TXFRS)  // Transmit Frame Sent
     {
         clear |= CLEAR_ALLTX_EVENTS; //clear TX event bits
-        dwt_write32bitreg(SY_STAT_ID,clear) ;         // write status register to clear event bits we have seen
+        dwt_write32bitreg(SYS_STATUS_ID,clear) ;         // write status register to clear event bits we have seen
         //NOTE: clear the event which caused interrupt means once the rx is enabled or tx is started
         //new events can trigger and give rise to new interrupts
         if(dw1000local.cdata.aatset)
         {
             dw1000local.cdata.aatset = 0; //the ACK has been sent
+            if(dw1000local.dblbuffon == 0) //if not double buffered
+            {
+            	if(dw1000local.wait4resp) //wait4response was set with the last TX start command
+            	{
+            		//if using wait4response and the ACK has been sent as the response requested it
+            		//the receiver will be re-enabled, so issue a TRXOFF command to disable and prevent any
+            		//unexpected interrupts
+            		dwt_forcetrxoff();
+            	}
+            }
         }
 
         dw1000local.cdata.event = DWT_SIG_TX_DONE ;  // signal TX completed
@@ -2127,38 +2319,51 @@ void dwt_isr(void) // assume interrupt can supply context
             dw1000local.dwt_txcallback(&dw1000local.cdata);
 
     }
-    else if (status & SY_STAT_RFTO)                                              // Receiver Frame Wait timeout:
+    else if (status & SYS_STATUS_RXRFTO)                                              // Receiver Frame Wait timeout:
     {
-        clear |= status & SY_STAT_RFTO ;
-        dwt_write32bitreg(SY_STAT_ID,clear) ;         // write status register to clear event bits we have seen
+        clear |= status & SYS_STATUS_RXRFTO ;
+        dwt_write32bitreg(SYS_STATUS_ID,clear) ;         // write status register to clear event bits we have seen
         dw1000local.cdata.event = DWT_SIG_RX_TIMEOUT  ;
         if(dw1000local.dwt_rxcallback != NULL)
             dw1000local.dwt_rxcallback(&dw1000local.cdata);
+        dw1000local.wait4resp = 0;
 
     }
-    else if(status & CLEAR_ALLRXERROR_EVENTS)
+    else if(status & CLEAR_ALLRXERROR_EVENTS)//catches all other error events 
     {
         clear |= status & CLEAR_ALLRXERROR_EVENTS;
-        dwt_write32bitreg(SY_STAT_ID,clear) ;         // write status register to clear event bits we have seen
+        dwt_write32bitreg(SYS_STATUS_ID,clear) ;         // write status register to clear event bits we have seen
+
+        dw1000local.wait4resp = 0;
         //NOTE: clear the event which caused interrupt means once the rx is enabled or tx is started
         //new events can trigger and give rise to new interrupts
-        if(status & SY_STAT_RPHE)
+#if 1
+		//fix for bug 622 - LDE done flag gets latched on a bad frame / reset receiver 
+		if(!(dw1000local.sysCFGreg & SYS_CFG_RXAUTR)) 
+			dwt_forcetrxoff(); //this will clear all events
+
+		dwt_rxreset();	//reset the RX
+
+		status &= CLEAR_ALLTX_EVENTS;
+		//end of fix for bug 622 - LDE done flag gets latched on a bad frame
+#endif
+        if(status & SYS_STATUS_RXPHE)
         {
             dw1000local.cdata.event = DWT_SIG_RX_PHR_ERROR  ;
         }
-        else if(status & SY_STAT_RFCE)
+        else if(status & SYS_STATUS_RXFCE)
         {
             dw1000local.cdata.event = DWT_SIG_RX_ERROR  ;
         }
-        else if(status & SY_STAT_RFSL)
+        else if(status & SYS_STATUS_RXRFSL)
         {
             dw1000local.cdata.event = DWT_SIG_RX_SYNCLOSS  ;
         }
-        else if(status & SY_STAT_SFDT)
+        else if(status & SYS_STATUS_RXSFDTO)
         {
             dw1000local.cdata.event = DWT_SIG_RX_SFDTIMEOUT  ;
         }
-        else if(status & SY_STAT_RXPTO)
+        else if(status & SYS_STATUS_RXPTO)
         {
             dw1000local.cdata.event = DWT_SIG_RX_PTOTIMEOUT  ;
         }
@@ -2173,9 +2378,9 @@ void dwt_isr(void) // assume interrupt can supply context
 }  // end dwt_isr()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setleds()
+ * @fn dwt_setleds()
  *
- *  Description: This is used to set up Tx/Rx GPIOs which could be used to control LEDs
+ *  @brief This is used to set up Tx/Rx GPIOs which could be used to control LEDs
  *  Note: not completely IC dependent, also needs board with LEDS fitted on right I/O lines
  *        this function enables GPIOs 2 and 3 which are connected to LED3 and LED4 on EVB1000
  *
@@ -2191,43 +2396,43 @@ void dwt_setleds(uint8 test)
 {
     uint8 buf[2];
 
-	if(test>0)
-	{
-    // Set up MFIO for LED output
-    dwt_readfromdevice(GPIO_CTRL_ID,0x00,2,buf);
-		//buf[1] |= 0x15; // Set GPIO3,2,1
-		//buf[0] |= 0x40; // Set GPIO0
-		//dwt_writetodevice(GPIO_CTRL_ID,0x00,2,buf);
-		buf[0] |= 0x14;
-		dwt_writetodevice(GPIO_CTRL_ID,0x01,1,buf);
-
-    // Enable LP Oscillator to run from counter, turn on debounce clock
-    dwt_readfromdevice(PMSC_ID,0x02,1,buf);
-    buf[0] |= 0x84; //
-    dwt_writetodevice(PMSC_ID,0x02,1,buf);
-
-    // Enable LEDs to blink
-    buf[0] = 0x10; // Blink period.
-    buf[1] = 0x01; // Enable blink counter
-    dwt_writetodevice(PMSC_ID,0x28,2,buf);
-
-    // Test LEDs
-		if(test==2)
+    if(test>0)
     {
-        buf[0] = 0x0f; // Fire a LED blink trigger
-        dwt_writetodevice(PMSC_ID,0x2a,1,buf);
-        buf[0] = 0x00; // Clear forced trigger bits
-        dwt_writetodevice(PMSC_ID,0x2a,1,buf);
+        // Set up MFIO for LED output
+        dwt_readfromdevice(GPIO_CTRL_ID,0x00,2,buf);
+        //buf[1] |= 0x15; // Set GPIO3,2,1
+        //buf[0] |= 0x40; // Set GPIO0
+        //dwt_writetodevice(GPIO_CTRL_ID,0x00,2,buf);
+        buf[1] |= 0x14;
+        dwt_writetodevice(GPIO_CTRL_ID,0x01,1,&buf[1]);
+
+        // Enable LP Oscillator to run from counter, turn on debounce clock
+        dwt_readfromdevice(PMSC_ID,0x02,1,buf);
+        buf[0] |= 0x84; //
+        dwt_writetodevice(PMSC_ID,0x02,1,buf);
+
+        // Enable LEDs to blink
+        buf[0] = 0x10; // Blink period.
+        buf[1] = 0x01; // Enable blink counter
+        dwt_writetodevice(PMSC_ID,PMSC_LEDC_OFFSET,2,buf);
+
+        // Test LEDs
+        if(test==2)
+        {
+            buf[0] = 0x0f; // Fire a LED blink trigger
+            dwt_writetodevice(PMSC_ID,0x2a,1,buf);
+            buf[0] = 0x00; // Clear forced trigger bits
+            dwt_writetodevice(PMSC_ID,0x2a,1,buf);
+        }
     }
-	}
-	else
-	{
-		// Clear the GPIO bits that are used for LED control
-		dwt_readfromdevice(GPIO_CTRL_ID,0x00,2,buf);
-		buf[1] &= ~(0x15); // Set GPIO3, 2, 1
-		buf[0] &= ~(0x40); // Set GPIO0
-		dwt_writetodevice(GPIO_CTRL_ID,0x00,2,buf);
-	}
+    else
+    {
+        // Clear the GPIO bits that are used for LED control
+        dwt_readfromdevice(GPIO_CTRL_ID,0x00,2,buf);
+        buf[1] &= ~(0x15); // Set GPIO3, 2, 1
+        buf[0] &= ~(0x40); // Set GPIO0
+        dwt_writetodevice(GPIO_CTRL_ID,0x00,2,buf);
+    }
 
 } // end _dwt_enableleds()
 
@@ -2249,7 +2454,7 @@ int _dwt_checkclkplllock(void)
 
     while((lock == 0) && (k-->0))
     {
-        dwt_readfromdevice(RF_CFG_STS_ID,0x2c,1,&rd_buf);
+        dwt_readfromdevice(RF_CONF_ID,0x2c,1,&rd_buf);
         if(((rd_buf & D_PLL_LOCK_WARN) == 0) //PLL needs re-cal - if hi/lo bits set - no lock
                 && (rd_buf & D_PLL_LOCK)) //PLL locked
         {
@@ -2268,7 +2473,7 @@ void _dwt_enableclocks(int clocks)
 {
     uint8 reg[2];
 
-    dwt_readfromdevice(PMSC_ID, 0x0, 2, reg);
+    dwt_readfromdevice(PMSC_ID, PMSC_CTRL0_OFFSET, 2, reg);
     switch(clocks)
     {
         case ENABLE_ALL_SEQ:
@@ -2289,20 +2494,6 @@ void _dwt_enableclocks(int clocks)
             reg[0] = 0x02 | (reg[0] & 0xfc);
         }
         break;
-        case READ_LDE_ON:
-        {
-            //LDE
-            reg[0] = 0x01 | (reg[0] & 0xfc);
-            reg[1] = 0x01 | reg[1];
-        }
-        break;
-        case READ_LDE_OFF:
-        {
-            //LDE
-            reg[0] = reg[0] & 0xfc;
-            reg[1] = reg[1] & 0xfe;
-        }
-        break;
         case READ_ACC_ON:
         {
             reg[0] = 0x48 | (reg[0] & 0xb3);
@@ -2316,26 +2507,14 @@ void _dwt_enableclocks(int clocks)
 
         }
         break;
-        case FORCE_NVM_ON:
+        case FORCE_OTP_ON:
         {
             reg[1] = 0x02 | reg[1];
         }
         break;
-        case FORCE_NVM_OFF:
+        case FORCE_OTP_OFF:
         {
             reg[1] = reg[1] & 0xfd;
-        }
-        break;
-        case FORCE_LDE_ON:
-        {
-            //LDE
-            reg[1] = 0x01 | reg[1];
-        }
-        break;
-        case FORCE_LDE_OFF:
-        {
-            //LDE
-            reg[1] = 0xFE & reg[1];
         }
         break;
         case FORCE_TX_PLL:
@@ -2348,23 +2527,33 @@ void _dwt_enableclocks(int clocks)
 
 
     // Need to write lower byte separately before setting the higher byte(s)
-    dwt_writetodevice(PMSC_ID, 0x0, 1, &reg[0]);
+    dwt_writetodevice(PMSC_ID, PMSC_CTRL0_OFFSET, 1, &reg[0]);
     dwt_writetodevice(PMSC_ID, 0x1, 1, &reg[1]);
 
 } // end _dwt_enableclocks()
 
-
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @fn _dwt_disablesequencing()
+ *
+ * @brief  This function disables the TX blocks sequencing, it disables PMSC control of RF blocks, system clock is also set to XTAL
+ *
+ * input parameters none
+ *
+ * output parameters none
+ *
+ * no return value
+ */
 void _dwt_disablesequencing(void) //disable sequencing and go to state "INIT"
 {
     _dwt_enableclocks(FORCE_SYS_XTI); //set system clock to XTI
 
-    dwt_write16bitoffsetreg(PMSC_ID, 0x4, 0x0); //disable PMSC ctrl of RF and RX clk blocks
+    dwt_write16bitoffsetreg(PMSC_ID, PMSC_CTRL1_OFFSET, PMSC_CTRL1_PKTSEQ_DISABLE); //disable PMSC ctrl of RF and RX clk blocks
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setdelayedtrxtime()
+ * @fn dwt_setdelayedtrxtime()
  *
- * Description:  This API function configures the delayed transmit time or the delayed rx on time
+ * @brief  This API function configures the delayed transmit time or the delayed rx on time
  *
  * input parameters
  * @param starttime - the tx/rx start time (the 32 bits should be the high 32 bits of the system time at which to send the message,
@@ -2374,6 +2563,7 @@ void _dwt_disablesequencing(void) //disable sequencing and go to state "INIT"
  *
  * no return value
  */
+#pragma GCC optimize ("O3")
 void dwt_setdelayedtrxtime(uint32 starttime)
 {
     dwt_write32bitoffsetreg(DX_TIME_ID, 1, starttime) ;
@@ -2381,49 +2571,51 @@ void dwt_setdelayedtrxtime(uint32 starttime)
 } // end dwt_setdelayedtrxtime()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_starttx()
+ * @fn dwt_starttx()
  *
- *  Description: This call initiates the transmission, input parameter indicates which TX mode is used see below
+ *  @brief This call initiates the transmission, input parameter indicates which TX mode is used see below
  *
  * input parameters:
  * @param mode - if 0 immediate TX (no response expected)
  *               if 1 delayed TX (no response expected)
- *               if 2 immediate TX (response expected - so the receiver sill be automatically turned on after TX is done)
- *               if 3 delayed TX (response expected - so the receiver sill be automatically turned on after TX is done)
+ *               if 2 immediate TX (response expected - so the receiver will be automatically turned on after TX is done)
+ *               if 3 delayed TX (response expected - so the receiver will be automatically turned on after TX is done)
  *
  * output parameters
  *
  * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error (e.g. a delayed transmission will fail if the delayed time has passed)
  */
+#pragma GCC optimize ("O3")
 int dwt_starttx(uint8 mode)
 {
     int retval = DWT_SUCCESS ;
-    uint8 temp  = 0x0;
+    uint8 temp  = 0x00;
 
     if(mode & DWT_RESPONSE_EXPECTED)
     {
-        temp = 0x80 ; //set wait4response bit
+        temp = (uint8)SYS_CTRL_WAIT4RESP ; //set wait4response bit
+        dw1000local.wait4resp = 1;
     }
 
     if (mode & DWT_START_TX_DELAYED)
     {
-        uint32 status ;
+        //uint32 status ;
 
         // both SYS_CTRL_TXSTRT and SYS_CTRL_TXDLYS to correctly enable TX
-        temp |= SYS_CTRL_TXDLYS | SYS_CTRL_TXSTRT ;
+        temp |= (uint8)(SYS_CTRL_TXDLYS | SYS_CTRL_TXSTRT) ;
         dwt_writetodevice(SYS_CTRL_ID,0,1,&temp) ;
-
-        status = dwt_read32bitreg(SY_STAT_ID) ;          // read status register
-        if ((status & (SY_STAT_DSHP /*| SY_STAT_TXPRERR*/)) == 0)                               // Transmit Delayed Send set over Half a Period away.
+        dwt_readfromdevice(SYS_STATUS_ID,3,1,&temp) ;
+        //status = dwt_read32bitreg(SYS_STATUS_ID) ;          // read status register
+        if ((temp & ((SYS_STATUS_HPDWARN >> 24) /*| SYS_STATUS_TXPRERR*/)) == 0)                               // Transmit Delayed Send set over Half a Period away.
         {
             //printf("tx delayed \n");
-            retval = DWT_SUCCESS ;                                            // All okay
+            retval = DWT_SUCCESS ;                                          // All okay
         }
         else
         {
             // I am taking DSHP set to Indicate that the TXDLYS was set too late for the specified DX_TIME.
             // Remedial Action - (a) cancel delayed send
-            temp = SYS_CTRL_TRXOFF ;                                   // this assumes the bit is in the lowest byte
+            temp = (uint8)SYS_CTRL_TRXOFF;                                  // this assumes the bit is in the lowest byte
             dwt_writetodevice(SYS_CTRL_ID,0,1,&temp) ;
             // note event Delayed TX Time too Late
             // could fall through to start a normal send (below) just sending late.....
@@ -2431,14 +2623,14 @@ int dwt_starttx(uint8 mode)
 
             // clear the "auto TX to sleep" bit
             dwt_entersleepaftertx(0);
-
+            dw1000local.wait4resp = 0;
             retval = DWT_ERROR ;                                            // Failed !
 
         }
     }
     else
     {
-        temp |= SYS_CTRL_TXSTRT ;
+        temp |= (uint8)SYS_CTRL_TXSTRT ;
         dwt_writetodevice(SYS_CTRL_ID,0,1,&temp) ;
     }
 
@@ -2446,33 +2638,57 @@ int dwt_starttx(uint8 mode)
 
 } // end dwt_starttx()
 
+// -------------------------------------------------------------------------------------------------------------------
+//
+// Clear overrun condition 
+//
+int dwt_checkoverrun(void)
+{
+	return (dwt_read16bitoffsetreg(SYS_STATUS_ID, 2) & (SYS_STATUS_RXOVRR >> 16));
+}
 
 // -------------------------------------------------------------------------------------------------------------------
 //
 // Force Transceiver OFF
 //
+#pragma GCC optimize ("O3")
 void dwt_forcetrxoff(void)
 {
+	decaIrqStatus_t stat ;
     uint8 temp ;
+	uint32 mask;
 
-    temp = SYS_CTRL_TRXOFF ;                       // this assumes the bit is in the lowest byte
-    dwt_writetodevice(SYS_CTRL_ID,0,1,&temp) ;
+    temp = (uint8)SYS_CTRL_TRXOFF ;                       // this assumes the bit is in the lowest byte
+	
+	mask = dwt_read32bitreg(SYS_MASK_ID) ;  //read set interrupt mask
+
+	// need to beware of interrupts occurring in the middle of following read modify write cycle
+	// we can disable the radio, but before the status is cleared an interrupt can be set (e.g. the 
+	// event has just happened before the radio was disabled)
+	// thus we need to disable interrupt during this operation
+    stat = decamutexon() ;
+
+	dwt_write32bitreg(SYS_MASK_ID, 0) ; //clear interrupt mask - so we don't get any unwanted events
+
+    dwt_writetodevice(SYS_CTRL_ID,0,1,&temp) ; //disable the radio
 
     // Forcing Transceiver off - so we do not want to see any new events that may have happened
-    dwt_write32bitreg(SY_STAT_ID,(CLEAR_ALLTX_EVENTS | CLEAR_ALLRXERROR_EVENTS | CLEAR_ALLRXGOOD_EVENTS)) ;
+    dwt_write32bitreg(SYS_STATUS_ID,(CLEAR_ALLTX_EVENTS | CLEAR_ALLRXERROR_EVENTS | CLEAR_ALLRXGOOD_EVENTS)) ;
 
     dwt_syncrxbufptrs();
 
-    //test code
-    temp = SYS_CTRL_TRXOFF ;                       // this assumes the bit is in the lowest byte
-    dwt_writetodevice(SYS_CTRL_ID,0,1,&temp) ;
+	dwt_write32bitreg(SYS_MASK_ID, mask) ; //set interrupt mask to what it was
+
+	//enable/restore interrupts again... 
+	decamutexoff(stat) ;
+    dw1000local.wait4resp = 0;
 
 } // end deviceforcetrxoff()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_syncrxbufptrs()
+ * @fn dwt_syncrxbufptrs()
  *
- *  Description: this function synchronizes rx buffer pointers
+ *  @brief this function synchronizes rx buffer pointers
  *  need to make sure that the host/IC buffer pointers are aligned before starting RX
  *
  * input parameters:
@@ -2483,22 +2699,22 @@ void dwt_forcetrxoff(void)
  */
 void dwt_syncrxbufptrs(void)
 {
-	uint8  buff ;
-	//need to make sure that the host/IC buffer pointers are aligned before starting RX
-	dwt_readfromdevice(SY_STAT_ID, 3, 1, &buff);
+    uint8  buff ;
+    //need to make sure that the host/IC buffer pointers are aligned before starting RX
+    dwt_readfromdevice(SYS_STATUS_ID, 3, 1, &buff);
 
-	if((buff & 0x80) !=  //IC side Receive Buffer Pointer
-			((buff & 0x40) << 1) ) //Host side Receive Buffer Pointer
-	{
-		uint8 hsrb = 1;
-		dwt_writetodevice(SYS_CTRL_ID, 3, 1, &hsrb) ;       // we need to swap rx buffer status reg (write one to toggle internally)
-	}
+    if((buff & (SYS_STATUS_ICRBP>>24) ) !=              /* IC side Receive Buffer Pointer */
+            ((buff & (SYS_STATUS_HSRBP>>24) ) << 1) )   /* Host Side Receive Buffer Pointer */
+    {
+        uint8 hsrb = 0x01;
+        dwt_writetodevice(SYS_CTRL_ID, SYS_CTRL_HRBT_OFFSET , 1, &hsrb) ;       // we need to swap rx buffer status reg (write one to toggle internally)
+    }
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setrxmode()
+ * @fn dwt_setrxmode()
  *
- *  Description: enable different rx modes, e.g.:
+ *  @brief enable different rx modes, e.g.:
  *   a) "snooze" mode, the receiver only listens periodically for preamble
  *   b) the rx PPDM "sniff" mode - receiver cycles through ON/OFF periods
  *
@@ -2513,57 +2729,58 @@ void dwt_syncrxbufptrs(void)
  */
 void dwt_setrxmode(int mode, uint8 rxON, uint8 rxOFF)
 {
-    uint16 reg16 =  ((rxOFF << 8) | rxON);
+    uint16 reg16 =  RX_SNIFF_MASK & ((rxOFF << 8) | rxON);
 
     if(mode & DWT_RX_SNIFF)
     {
         // PPM_OFF 15:8, PPM_ON 3:0
-        dwt_write16bitoffsetreg(PPDM_ID, 0x00, reg16) ; //enable
+        dwt_write16bitoffsetreg(RX_SNIFF_ID, 0x00, reg16) ; //enable
     }
     else
     {
-        dwt_write16bitoffsetreg(PPDM_ID, 0x00, 0x0000) ; //disable
+        dwt_write16bitoffsetreg(RX_SNIFF_ID, 0x00, 0x0000) ; //disable
     }
 
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_rxenable()
+ * @fn dwt_rxenable(int delayed)
  *
- *  Description: This call turns on the receiver, can be immediate or delayed.
+ * @brief This call turns on the receiver, can be immediate or delayed.
  *  The receiver will stay turned on, listening to any messages until
  *  it either receives a good frame, an error (CRC, PHY header, Reed Solomon) or  it times out (SFD, Preamble or Frame).
  *
  * input parameters
  * @param delayed - TRUE the receiver is turned on after some delay (as programmed with dwt_setdelayedtime())
  *
- * output parameters
- *
- * returns DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error (e.g. a delayed receive enable will be too far in the future if delayed time has passed (if delayed time is > 8s from now))
+ * @return DWT_DECA_SUCCESS for success, or DWT_DECA_ERROR for error (e.g. a delayed receive enable will be too far in the future if delayed time has passed (if delayed time is > 8s from now))
  */
+#pragma GCC optimize ("O3")
 int dwt_rxenable(int delayed)
 {
     uint16 temp ;
-
+    uint8 temp1 = 0;
     dwt_syncrxbufptrs();
 
-    temp = SYS_CTRL_RXENAB ;
+    temp = (uint16)SYS_CTRL_RXENAB ;
 
     if (delayed)
     {
-        temp |= SYS_CTRL_RXDLYE ;
+        temp |= (uint16)SYS_CTRL_RXDLYE ;
     }
 
     dwt_write16bitoffsetreg(SYS_CTRL_ID,0,temp) ;
 
     if (delayed) //check for errors
     {
-        uint32 status1 = dwt_read32bitreg(SY_STAT_ID) ;          // read status register
+        //uint32 status1 = dwt_read32bitreg(SYS_STATUS_ID) ;          // read status register
 
-        if (status1 & (SY_STAT_DSHP)) //if delay has not passed do delayed else immediate RX on
+    	dwt_readfromdevice(SYS_STATUS_ID,3,1,&temp1) ;
+
+        if (temp1 & (SYS_STATUS_HPDWARN >> 24)) //if delay has not passed do delayed else immediate RX on
         {
             dwt_forcetrxoff(); //turn the delayed receive off, and do immediate receive, return warning indication
-            temp = SYS_CTRL_RXENAB ; //clear the delay bit
+            temp = (uint16)SYS_CTRL_RXENAB; //clear the delay bit
             dwt_write16bitoffsetreg(SYS_CTRL_ID,0,temp) ;
             return DWT_ERROR;
         }
@@ -2573,9 +2790,9 @@ int dwt_rxenable(int delayed)
 } // end dwt_rxenable()
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setrxtimeout()
+ * @fn  dwt_setrxtimeout()
  *
- *  Description: This call enables RX timeout (SY_STAT_RFTO event)
+ * @brief This call enables RX timeout (SY_STAT_RFTO event)
  *
  * input parameters
  * @param time - how long the receiver remains on from the RX enable command
@@ -2596,17 +2813,17 @@ void dwt_setrxtimeout(uint16 time)
     {
         dwt_write16bitoffsetreg(RX_FWTO_ID, 0x0, time) ;
 
-        temp |= SYS_CFG_RXWTOE_SB;
+        temp |= (uint8)(SYS_CFG_RXWTOE>>24);
         // OR in 32bit value (1 bit set), I know this is in high byte.
-        dw1000local.sysCFGreg |= (SYS_CFG_RXWTOE_SB << 24);
+        dw1000local.sysCFGreg |= SYS_CFG_RXWTOE;
 
         dwt_writetodevice(SYS_CFG_ID,3,1,&temp) ;
     }
     else
     {
-        temp &= (~SYS_CFG_RXWTOE_SB);
+        temp &= ~((uint8)(SYS_CFG_RXWTOE>>24));
         // AND in inverted 32bit value (1 bit clear), I know this is in high byte.
-        dw1000local.sysCFGreg &= ~(SYS_CFG_RXWTOE_SB << 24);
+        dw1000local.sysCFGreg &= ~(SYS_CFG_RXWTOE);
 
         dwt_writetodevice(SYS_CFG_ID,3,1,&temp) ;
 
@@ -2617,9 +2834,9 @@ void dwt_setrxtimeout(uint16 time)
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_setpreambledetecttimeout()
+ * @fn dwt_setpreambledetecttimeout()
  *
- *  Description: This call enables preamble timeout (SY_STAT_RXPTO event)
+ *  @brief This call enables preamble timeout (SY_STAT_RXPTO event)
  *
  * input parameters
  * @param  timeout - in PACs
@@ -2630,15 +2847,15 @@ void dwt_setrxtimeout(uint16 time)
  */
 void dwt_setpreambledetecttimeout(uint16 timeout)
 {
-    dwt_write16bitoffsetreg(DRX_CFG_STS_ID, RX_DTUNE4_SUB_ADDR, timeout);
+    dwt_write16bitoffsetreg(DRX_CONF_ID, DRX_PRETOC_OFFSET, timeout);
 }
 
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: void dwt_setinterrupt( uint32 bitmask, uint8 enable)
+ * @fn void dwt_setinterrupt( uint32 bitmask, uint8 enable)
  *
- * Description: This function enables the specified events to trigger an interrupt.
+ * @brief This function enables the specified events to trigger an interrupt.
  * The following events can be enabled:
  * DWT_INT_TFRS         0x00000080          // frame sent
  * DWT_INT_RFCG         0x00004000          // frame received with good CRC
@@ -2667,27 +2884,23 @@ void dwt_setinterrupt(uint32 bitmask, uint8 enable)
     // need to beware of interrupts occurring in the middle of following read modify write cycle
     stat = decamutexon() ;
 
-    mask = dwt_read32bitreg(SY_MASK_ID) ;           // read register
+    mask = dwt_read32bitreg(SYS_MASK_ID) ;           // read register
 
     if(enable)
         mask |= bitmask ;
     else
         mask &= ~bitmask ;  // clear the bit
 
-#ifdef _MSC_VER
-    //if using PC/Cheetah - Interrupts are not supported...
-#else
-    dwt_write32bitreg(SY_MASK_ID,mask) ;            // new value
-#endif
+    dwt_write32bitreg(SYS_MASK_ID,mask) ;            // new value
 
     decamutexoff(stat) ;
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configeventcounters()
+ * @fn dwt_configeventcounters()
  *
- *  Description: This is used to enable/disable the event counter in the IC
+ *  @brief This is used to enable/disable the event counter in the IC
  *
  * input parameters
  * @param - enable - 1 enables (and reset), 0 disables the event counters
@@ -2699,21 +2912,21 @@ void dwt_configeventcounters(int enable)
 {
     uint8 temp = 0x0;  //disable
     //need to clear and disable, can't just clear
-    temp = 0x2; //clear and disable
-    dwt_writetodevice(EVENT_CTRL_ID, 0x0, 1, &temp) ;
+    temp = (uint8)(EVC_CLR); //clear and disable
+    dwt_writetodevice(DIG_DIAG_ID, EVC_CTRL_OFFSET, 1, &temp) ;
 
     if(enable)
     {
-        temp = 0x1; //enable
-        dwt_writetodevice(EVENT_CTRL_ID, 0x0, 1, &temp) ;
+        temp = (uint8)(EVC_EN); //enable
+        dwt_writetodevice(DIG_DIAG_ID, EVC_CTRL_OFFSET, 1, &temp) ;
     }
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readeventcounters()
+ * @fn dwt_readeventcounters()
  *
- *  Description: This is used to read the event counters in the IC
+ *  @brief This is used to read the event counters in the IC
  *
  * input parameters
  * @param counters - pointer to the dwt_deviceentcnts_t structure which will hold the read data
@@ -2726,35 +2939,57 @@ void dwt_readeventcounters(dwt_deviceentcnts_t *counters)
 {
     uint32 temp;
 
-    temp= dwt_read32bitoffsetreg(EVENT_CTRL_ID, EVENT_COUNT0); //read sync loss (31-16), PHE (15-0)
+    temp= dwt_read32bitoffsetreg(DIG_DIAG_ID, EVC_PHE_OFFSET); //read sync loss (31-16), PHE (15-0)
     counters->PHE = temp & 0xFFF;
     counters->RSL = (temp >> 16) & 0xFFF;
 
-    temp = dwt_read32bitoffsetreg(EVENT_CTRL_ID, EVENT_COUNT1); //read CRC bad (31-16), CRC good (15-0)
+    temp = dwt_read32bitoffsetreg(DIG_DIAG_ID, EVC_FCG_OFFSET); //read CRC bad (31-16), CRC good (15-0)
     counters->CRCG = temp & 0xFFF;
     counters->CRCB = (temp >> 16) & 0xFFF;
 
-    temp = dwt_read32bitoffsetreg(EVENT_CTRL_ID, EVENT_COUNT2); //overruns (31-16), address errors (15-0)
+    temp = dwt_read32bitoffsetreg(DIG_DIAG_ID, EVC_FFR_OFFSET); //overruns (31-16), address errors (15-0)
     counters->ARFE = temp & 0xFFF;
     counters->OVER = (temp >> 16) & 0xFFF;
 
-    temp = dwt_read32bitoffsetreg(EVENT_CTRL_ID, EVENT_COUNT3); //read PTO (31-16), SFDTO (15-0)
+    temp = dwt_read32bitoffsetreg(DIG_DIAG_ID, EVC_STO_OFFSET); //read PTO (31-16), SFDTO (15-0)
     counters->PTO = (temp >> 16) & 0xFFF;
     counters->SFDTO = temp & 0xFFF;
 
-    temp = dwt_read32bitoffsetreg(EVENT_CTRL_ID, EVENT_COUNT4); //read RX TO (31-16), TXFRAME (15-0)
+    temp = dwt_read32bitoffsetreg(DIG_DIAG_ID, EVC_FWTO_OFFSET); //read RX TO (31-16), TXFRAME (15-0)
     counters->TXF = (temp >> 16) & 0xFFF;
     counters->RTO = temp & 0xFFF;
 
-    temp = dwt_read32bitoffsetreg(EVENT_CTRL_ID, EVENT_COUNT5); //read half period warning events
+    temp = dwt_read32bitoffsetreg(DIG_DIAG_ID, EVC_HPW_OFFSET); //read half period warning events
     counters->HPW = temp & 0xFFF;
     counters->TXW = (temp >> 16) & 0xFFF;                       //power up warning events
+
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_softreset()
+ * @fn dwt_rxreset()
  *
- *  Description: this function resets the DW1000
+ *  @brief this function resets the receiver of the DW1000
+ *
+ * input parameters:
+ *
+ * output parameters
+ *
+ * no return value
+ */
+void dwt_rxreset(void)
+{
+	uint8 resetrx = 0xe0;
+	//set rx reset (writing 
+	dwt_writetodevice(PMSC_ID, 0x3, 1, &resetrx);
+
+	resetrx = 0xf0; //clear RX reset
+	dwt_writetodevice(PMSC_ID, 0x3, 1, &resetrx);
+}
+
+/*! ------------------------------------------------------------------------------------------------------------------
+ * @fn dwt_softreset()
+ *
+ *  @brief this function resets the DW1000
  *
  * input parameters:
  *
@@ -2770,9 +3005,9 @@ void dwt_softreset(void)
     //_dwt_enableclocks(FORCE_SYS_XTI); //set system clock to XTI
 
     //clear any AON auto download bits (as reset will trigger AON download)
-    dwt_write16bitoffsetreg(AON_ID,0x00,0x0);
+    dwt_write16bitoffsetreg(AON_ID, AON_WCFG_OFFSET, 0x0);
     //clear the wakeup configuration
-    dwt_writetodevice(AON_ID,0x06,1,temp);
+    dwt_writetodevice(AON_ID, AON_CFG0_OFFSET, 1, temp);
     //upload the new configuration
     _dwt_aonarrayupload();
 
@@ -2789,17 +3024,19 @@ void dwt_softreset(void)
     temp[0] |= 0xF0;
     dwt_writetodevice(PMSC_ID, 0x3, 1, &temp[0]) ;
 
+    dw1000local.wait4resp = 0;
+
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_xtaltrim()
+ * @fn dwt_xtaltrim()
  *
- *  Description: This is used adjust the crystal frequency
+ * @brief This is used adjust the crystal frequency
  *
  * input parameters:
  * @param   value - crystal trim value (in range 0x0 to 0x1F) 31 steps (~1.5ppm per step)
  *
- * output parameters
+ * @output
  *
  * no return value
  */
@@ -2807,20 +3044,20 @@ void dwt_xtaltrim(uint8 value)
 {
     uint8 write_buf;
 
-    dwt_readfromdevice(SYNTH_CAL_ID,0xE,1,&write_buf);
+    dwt_readfromdevice(FS_CTRL_ID,FS_XTALT_OFFSET,1,&write_buf);
 
-    write_buf &= 0xE0 ;
+    write_buf &= ~FS_XTALT_MASK ;
 
-    write_buf |= value ;
+    write_buf |= (FS_XTALT_MASK & value) ; // we should not change high bits, cause it will cause malfunction
 
-    dwt_writetodevice(SYNTH_CAL_ID,0xE,1,&write_buf);
+    dwt_writetodevice(FS_CTRL_ID,FS_XTALT_OFFSET,1,&write_buf);
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configcwmode()
+ * @fn dwt_configcwmode()
  *
- *  Description: this function sets the DW1000 to transmit cw signal at specific channel frequency
+ *  @brief this function sets the DW1000 to transmit cw signal at specific channel frequency
  *
  * input parameters:
  * @param chan - specifies the operating channel (e.g. 1, 2, 3, 4, 5, 6 or 7)
@@ -2836,11 +3073,6 @@ int dwt_configcwmode(uint8 chan)
     if ((chan < 1) || (chan > 7) || (6 == chan)) return DWT_ERROR ; // validate channel number parameter
 #endif
 
-    write_buf[0] = 0x13;
-
-    //configure CW mode
-    dwt_writetodevice(TX_CAL_ID, 0x0c, 1, write_buf);
-
     //
     //  disable TX/RX RF block sequencing (needed for cw frame mode)
     //
@@ -2848,39 +3080,46 @@ int dwt_configcwmode(uint8 chan)
 
     //config RF pll (for a given channel)
     //configure PLL2/RF PLL block CFG
-    dwt_writetodevice(SYNTH_CAL_ID, 0x07, 5, &pll2_config[chan_idx[chan]][0]);
+    dwt_writetodevice(FS_CTRL_ID, 0x07, 5, &pll2_config[chan_idx[chan]][0]);
     //configure PLL2/RF PLL block CAL
-    dwt_writetodevice(SYNTH_CAL_ID, 0x0e, 1, &pll2calcfg);
+    dwt_writetodevice(FS_CTRL_ID, 0x0e, 1, &pll2calcfg);
     //PLL wont be enabled until a TX/RX enable is issued later on
     // Configure RF TX blocks (for specified channel and prf)
     //Config RF TX control
-    dwt_write32bitoffsetreg(RF_CFG_STS_ID, RF_CTRLTX_SUB_ADDR, tx_config[chan_idx[chan]]);
+    dwt_write32bitoffsetreg(RF_CONF_ID, RF_TXCTRL_OFFSET, tx_config[chan_idx[chan]]);
 
 
     //
     // enable RF PLL
     //
-    dwt_write32bitreg(RF_CFG_STS_ID, 0x01FE000);
-    dwt_write32bitreg(RF_CFG_STS_ID, 0x05FFF00);
+    dwt_write32bitreg(RF_CONF_ID, RF_CONF_TXPLLPOWEN_MASK);   //enable LDO and RF PLL blocks
+    dwt_write32bitreg(RF_CONF_ID, RF_CONF_TXALLEN_MASK);   //enable the rest of TX blocks
 
     //
     //  configure TX clocks
     //
     write_buf[0] = 0x22;
-    dwt_writetodevice(PMSC_ID,0x0,1,write_buf);
+    dwt_writetodevice(PMSC_ID,PMSC_CTRL0_OFFSET,1,write_buf);
     write_buf[0] = 0x07;
     dwt_writetodevice(PMSC_ID,0x1,1,write_buf);
 
     //disable fine grain TX seq
-    dwt_write16bitoffsetreg(PMSC_ID,0x26,0);
+    dwt_write16bitoffsetreg(PMSC_ID, PMSC_TXFINESEQ_OFFSET, PMSC_TXFINESEQ_DIS_MASK);
+
+	
+	write_buf[0] = TC_PGTEST_CW;
+
+    //configure CW mode
+    dwt_writetodevice(TX_CAL_ID, TC_PGTEST_OFFSET, TC_PGTEST_LEN, write_buf);
+
 
     return DWT_SUCCESS ;
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_configcontinuousframemode()
+ * @fn dwt_configcontinuousframemode()
  *
- *  Description: this function sets the DW1000 to continuous tx frame mode
+ *  @brief this function sets the DW1000 to continuous tx frame mode
  *
  * input parameters:
  * @param framerepetitionrate - specifies the
@@ -2900,8 +3139,8 @@ void dwt_configcontinuousframemode(uint32 framerepetitionrate)
 
     // enable RF PLL and TX blocks
     //
-    dwt_write32bitreg(RF_CFG_STS_ID, 0x01FE000);
-    dwt_write32bitreg(RF_CFG_STS_ID, 0x05FFF00);
+    dwt_write32bitreg(RF_CONF_ID, RF_CONF_TXPLLPOWEN_MASK);   //enable LDO and RF PLL blocks
+    dwt_write32bitreg(RF_CONF_ID, RF_CONF_TXALLEN_MASK);   //enable the rest of TX blocks
 
     //
     //  configure TX clocks
@@ -2917,16 +3156,15 @@ void dwt_configcontinuousframemode(uint32 framerepetitionrate)
     //
     //  configure continuous frame TX
     //
-    write_buf[0] = 0x10;
-    dwt_writetodevice(EVENT_CTRL_ID,0x24,1,write_buf); //turn the tx power spectrum test mode - continuous sending of frames
+    write_buf[0] = (uint8)(DIAG_TMC_TX_PSTM) ;
+    dwt_writetodevice(DIG_DIAG_ID, DIAG_TMC_OFFSET, 1,write_buf); //turn the tx power spectrum test mode - continuous sending of frames
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readtempvbat()
+ * @fn dwt_readtempvbat()
  *
- *  Description: this function reads the battery voltage and temperature of the MP
+ *  @brief this function reads the battery voltage and temperature of the MP
  *  The values read here will be the current values sampled by DW1000 AtoD converters.
- *  Note: SPI must be up to 3MHz
  *  Note on Temperature: the temperature value needs to be converted to give the real temperature
  *  the formula is: 1.13 * reading - 113.0
  *  Note on Voltage: the voltage value needs to be converted to give the real voltage
@@ -2940,43 +3178,44 @@ void dwt_configcontinuousframemode(uint32 framerepetitionrate)
  */
 uint16 dwt_readtempvbat(void)
 {
-    uint8 wr_buf[1];
+    uint8 wr_buf[2];
     uint8 vbat_raw;
     uint8 temp_raw;
 
+	
     //these writes should be single writes and in sequence
     wr_buf[0] = 0x80; // Enable TLD Bias
-    dwt_writetodevice(RF_CFG_STS_ID,0x11,1,wr_buf);
+    dwt_writetodevice(RF_CONF_ID,0x11,1,wr_buf);
 
     wr_buf[0] = 0x0A; // Enable TLD Bias and ADC Bias
-    dwt_writetodevice(RF_CFG_STS_ID,0x12,1,wr_buf);
+    dwt_writetodevice(RF_CONF_ID,0x12,1,wr_buf);
 
     wr_buf[0] = 0x0f; // Enable Outputs (only after Biases are up and running)
-    dwt_writetodevice(RF_CFG_STS_ID,0x12,1,wr_buf);
+    dwt_writetodevice(RF_CONF_ID,0x12,1,wr_buf);    //
 
 
     // Reading All SAR inputs
-    wr_buf[0] = 0x00; // Clear TX LVL read
-    dwt_writetodevice(TX_CAL_ID,0x01,1,wr_buf);
     wr_buf[0] = 0x00; //
-    dwt_writetodevice(TX_CAL_ID,0x00,1,wr_buf);
+    dwt_writetodevice(TX_CAL_ID, TC_SARL_SAR_C,1,wr_buf);
     wr_buf[0] = 0x01; // Set SAR enable
-    dwt_writetodevice(TX_CAL_ID,0x00,1,wr_buf);
+    dwt_writetodevice(TX_CAL_ID, TC_SARL_SAR_C,1,wr_buf);
 
-    // Bug in Register read in TXCAL block. Do one byte at a time
-    dwt_readfromdevice(TX_CAL_ID,0x03,1,&vbat_raw);
-    dwt_readfromdevice(TX_CAL_ID,0x04,1,&temp_raw);
+    //read voltage and temperature.
+	dwt_readfromdevice(TX_CAL_ID, TC_SARL_SAR_LTEMP_OFFSET,2,wr_buf);
+
+	vbat_raw = wr_buf[1];
+	temp_raw = wr_buf[0];
 
     wr_buf[0] = 0x00; // Clear SAR enable
-    dwt_writetodevice(TX_CAL_ID,0x00,1,wr_buf);
+    dwt_writetodevice(TX_CAL_ID, TC_SARL_SAR_C,1,wr_buf);
 
     return ((temp_raw<<8)|(vbat_raw));
 }
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readwakeuptemp()
+ * @fn dwt_readwakeuptemp()
  *
- *  Description: this function reads the temperature of the DW1000 that was sampled
+ *  @brief this function reads the temperature of the DW1000 that was sampled
  *  on waking from Sleep/Deepsleep. They are not current values, but read on last
  *  wakeup if DWT_TANDV bit is set in mode parameter of dwt_configuresleep
  *
@@ -2990,15 +3229,15 @@ uint16 dwt_readtempvbat(void)
 uint8 dwt_readwakeuptemp(void)
 {
     uint8 temp_raw;
-    dwt_readfromdevice(TX_CAL_ID,0x04,1,&temp_raw);
+    dwt_readfromdevice(TX_CAL_ID,TC_SARL_SAR_LTEMP_OFFSET,1,&temp_raw);
     return (temp_raw);
 }
 
 
 /*! ------------------------------------------------------------------------------------------------------------------
- * Function: dwt_readwakeupvbat()
+ *  @fn dwt_readwakeupvbat()
  *
- *  Description: this function reads the battery voltage of the DW1000 that was sampled
+ *  @brief this function reads the battery voltage of the DW1000 that was sampled
  *  on waking from Sleep/Deepsleep. They are not current values, but read on last
  *  wakeup if DWT_TANDV bit is set in mode parameter of dwt_configuresleep
  *
@@ -3012,7 +3251,7 @@ uint8 dwt_readwakeuptemp(void)
 uint8 dwt_readwakeupvbat(void)
 {
     uint8 vbat_raw;
-    dwt_readfromdevice(TX_CAL_ID,0x03,1,&vbat_raw);
+    dwt_readfromdevice(TX_CAL_ID,TC_SARL_SAR_LVBAT_OFFSET,1,&vbat_raw);
     return (vbat_raw);
 }
 

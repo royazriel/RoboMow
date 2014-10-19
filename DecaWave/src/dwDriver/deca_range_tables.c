@@ -21,7 +21,7 @@
 #define NUM_64M_OFFSETWB  (59)
 
 const uint8 chan_idxnb[NUM_CH_SUPPORTED] = {0, 0, 1, 2, 0, 3, 0, 0}; //only channels 1,2,3 and 5 are in the narrow band tables
-const uint8 chan_idxwb[NUM_CH_SUPPORTED] = {0, 0, 0, 0, 1, 0, 0, 2}; //only channels 4 and 7 are in in the wide band tables
+const uint8 chan_idxwb[NUM_CH_SUPPORTED] = {0, 0, 0, 0, 0, 0, 0, 1}; //only channels 4 and 7 are in in the wide band tables
 
 //---------------------------------------------------------------------------------------------------------------------------
 // Range Bias Correction TABLES of range values in integer units of 25 CM, for 8-bit unsigned storage, MUST END IN 255 !!!!!!

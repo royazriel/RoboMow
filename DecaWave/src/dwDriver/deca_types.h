@@ -1,14 +1,17 @@
-// -------------------------------------------------------------------------------------------------------------------
-//
-//  File: deca_types.h - DecaWave general type definitions
-//
-//  Copyright 2008 (c) DecaWave Ltd, Dublin, Ireland.
-//
-//  All rights reserved.
-//
-//  Author: Billy Verso, November 2008
-//
-// -------------------------------------------------------------------------------------------------------------------
+/****************************************************************************//**
+ *  @file 	deca_types.h
+ *  @brief 	DecaWave general type definitions
+ *
+ *  @attention
+ *
+ *  Copyright 2008 (c) DecaWave Ltd, Dublin, Ireland.
+ *
+ *  All rights reserved.
+ *
+ *  @author Billy Verso, November 2008
+ *
+ ********************************************************************************
+**/
 
 #ifndef _DECA_TYPES_H_
 #define _DECA_TYPES_H_
