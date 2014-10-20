@@ -431,7 +431,11 @@ int instance_init(void)
     instance_data[instance].rxautoreenable = 0;
 
     dwt_geteui(instance_data[instance].eui64);
-
+	dwt_geteui(instance_data[instance].eui64);
+	PINFO("device EUI = %02x%02x%02x%02x%02x%02x%02x%02x\n", instance_data[instance].eui64[7], instance_data[instance].eui64[6],
+			instance_data[instance].eui64[5], instance_data[instance].eui64[4],
+			instance_data[instance].eui64[3], instance_data[instance].eui64[2],
+			instance_data[instance].eui64[1], instance_data[instance].eui64[0]);
     instance_localdata[instance].testapprun_fn = NULL;
     instance_data[instance].canprintinfo = 0;
     return 0 ;
