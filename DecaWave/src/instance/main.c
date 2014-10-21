@@ -18,7 +18,7 @@
 #include "deca_device_api.h"
 #include "compiler.h"
 #include "spiDriver.h"
-
+#include "udpClient.h"
 #include "instance.h"
 
 #include "deca_types.h"
@@ -225,8 +225,11 @@ plConfig_t tempPayloadConfig ;              // a copy for temp update in dialog
 #endif
 static SpiConfig s_spi;
 int instance_anchaddr = 0;
+int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
+unsigned char* ipAddress;
+int port;
 int instance_mode = ANCHOR;
 int viewClockOffset = 0 ;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
@@ -310,7 +313,10 @@ uint32 inittestapplication()
 
 	if(instance_mode == ANCHOR)
 	{
-
+		if( UdpclinetConnect((const char *)ipAddress, port))
+		{
+			PINFO("udp client failed to init socket");
+		}
 	}
 	else
 	{
@@ -459,11 +465,13 @@ uint32 getmstime()
 
 static void print_usage(const char *prog)
 {
-	printf("Usage: %s [-drc] [data,..]\n", prog);
-	puts("  -d --device   device to use (default /dev/spidev1.1)\n"
-	     "  -r --role     0 = LISTENER 1 = TAG 2 = ANCHOR\n"
-	     "  -c --channel  channel selection 0-7 like on evkDW1000\n"
-		 "  -p --poll     poll delay in milisec\n"
+	printf("Usage: %s [-drcipt] [data,..]\n", prog);
+	puts("  -d --device   	device to use (default /dev/spidev1.1)\n"
+	     "  -r --role     	0 = LISTENER 1 = TAG 2 = ANCHOR\n"
+	     "  -c --channel  	channel selection 0-7 like on evkDW1000\n"
+		 "  -i --ipAddress  udp server address\n"
+		 "  -p --port 		server listening port"
+		 "  -t --tagID		tag serial number"
 	);
 	exit(1);
 }
@@ -475,7 +483,9 @@ static void parse_opts(int argc, char *argv[])
 			{ "device"	, 1, 0, 'd' },
 			{ "role"	, 1, 0, 'r' },
 			{ "channel"	, 1, 0, 'c' },
-			{ "poll"	, 1, 0, 'p' },
+			{ "ipAddress"	, 1, 0, 'i' },
+			{ "port"	, 1, 0, 'p' },
+			{ "tagID"	, 1, 0, 't' },
 			{ NULL		, 0, 0, 0 	},
 		};
 		int c;
@@ -489,6 +499,9 @@ static void parse_opts(int argc, char *argv[])
 		case 'd':
 			s_spi.device = optarg;
 			break;
+		case 'i':
+					ipAddress = optarg;
+					break;
 		case 'r':
 			instance_mode = (int)strtol(optarg, NULL, 0);
 			break;
@@ -496,8 +509,12 @@ static void parse_opts(int argc, char *argv[])
 			dr_mode = (int)strtol(optarg, NULL, 0);
 			break;
 		case 'p':
-			poll_delay = (int)strtol(optarg, NULL, 0);
+			port = (int)strtol(optarg, NULL, 0);
 			break;
+		case 't':
+			instance_tagaddr = (int)strtol(optarg, NULL, 0);
+			break;
+
 		default:
 			print_usage(argv[0]);
 			break;
@@ -510,9 +527,10 @@ int main(int argc, char *argv[])
 	int ranging = 0;
 	double range_result = 0;
 	double avg_result = 0;
+	unsigned char buffer[100];
 
 	s_spi.bits = 8;
-	s_spi.speed = 4500000;
+	s_spi.speed = 1000000; //4500000;
 	s_spi.delay = 0;
 	s_spi.mode = 0;
 	s_spi.toggle_cs = 0;
@@ -521,8 +539,10 @@ int main(int argc, char *argv[])
 	parse_opts(argc, argv);
 
 	openspi( &s_spi );
-
 	PINFO( "spi initialized");
+
+
+
 
     if(inittestapplication() == (uint32)-1)
 	{
@@ -548,7 +568,9 @@ int main(int argc, char *argv[])
 	            //set_rangeresult(range_result);
 	            PCLS;
 	            PINFO("LAST: %4.2f m", range_result);
-
+	            (*(uint32*)buffer)= instance_tagaddr;
+	            (*(float*)(buffer+4)) = (float)range_result;
+	            UdpClinetSendReportTOF(buffer, 8);
 
 #if (DR_DISCOVERY == 0)
 	            if(instance_mode == ANCHOR)
