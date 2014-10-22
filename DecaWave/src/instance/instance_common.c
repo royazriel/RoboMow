@@ -731,7 +731,6 @@ void instance_txcallback(const dwt_callback_data_t *txd)
 
 		//NOTE - we can only get TX good (done) while here
 		//dwt_readtxtimestamp((uint8*) &instance_data[instance].txu.txTimeStamp);
-
 		dwt_readtxtimestamp(txTimeStamp) ;
 		dw_event.timeStamp32l = (uint32)txTimeStamp[0] + ((uint32)txTimeStamp[1] << 8) + ((uint32)txTimeStamp[2] << 16) + ((uint32)txTimeStamp[3] << 24);
 		dw_event.timeStamp = txTimeStamp[4];

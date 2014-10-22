@@ -222,7 +222,7 @@ int testapprun_s(instance_data_t *inst, int message)
 	//printf("\n\n inst-> testAppState=%d  -> mode=%d  message=%d time_ms %u\n\n",inst->testAppState,inst->mode, message, getmstime()-startTime);
 	if( inst->testAppState != inst->prevStateDebug )
 	{
-		PINFO("testAppState: %s message %d time %u",GetStateName(inst->testAppState), message, getmstime()-startTime );
+		//PINFO("testAppState: %s message %d time %u",GetStateName(inst->testAppState), message, getmstime()-startTime );
 		inst->prevStateDebug =  inst->testAppState;
 	}
 

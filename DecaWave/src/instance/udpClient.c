@@ -28,6 +28,7 @@ int UdpclinetConnect( const char * serverIp, int port )
     	return -1;
     }
 
+    PINFO("socket info ip: %s port: %d",serverIp, port);
     memset((char *) &s_socket, 0, sizeof(s_socket));
     s_socket.sin_family = AF_INET;
     s_socket.sin_port = htons(port);
