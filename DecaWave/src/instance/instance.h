@@ -233,9 +233,9 @@ typedef enum inst_states
 } INST_STATES;
 
 typedef struct _StateString {
-	uint8 state;
+	int8 state;
 	uint8 name[30];
-}StateString;
+}Code2String;
 
 // This file defines data and functions for access to Parameters in the Device
 //message structure for Poll, Response and Final message

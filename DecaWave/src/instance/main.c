@@ -22,6 +22,7 @@
 #include "instance.h"
 
 #include "deca_types.h"
+#include "gpioDriver.h"
 
 #define SOFTWARE_VER_STRING    "Version 2.26    " //
 
@@ -529,6 +530,26 @@ int main(int argc, char *argv[])
 	double avg_result = 0;
 	unsigned char buffer[100];
 
+	GPIOExport(DW_RESET_PIN);
+	GPIODirection(DW_RESET_PIN,OUT);
+	GPIOWrite( DW_RESET_PIN, LOW );
+
+	GPIOExport(DW_EXT_ON);
+	GPIODirection(DW_EXT_ON,OUT);
+	GPIOWrite( DW_EXT_ON, HIGH );
+
+	//GPIOExport(DW_WAKEUP_PIN);
+	//GPIODirection(DW_WAKEUP_PIN,OUT);
+	//GPIOWrite( DW_WAKEUP_PIN, LOW );
+
+	usleep( 3000 ); //wait 3ms according to datasheet
+
+	GPIOWrite( DW_RESET_PIN, HIGH ); //take out of reset drive to low for reset
+
+	GPIOExport(DW_WAKEUP_PIN);
+	GPIODirection(DW_WAKEUP_PIN,OUT);
+	GPIOWrite( DW_WAKEUP_PIN, LOW );
+
 	s_spi.bits = 8;
 	s_spi.speed = 1000000; //4500000;
 	s_spi.delay = 0;
@@ -566,7 +587,7 @@ int main(int argc, char *argv[])
 #endif
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
-	            PCLS;
+	            //PCLS;
 	            PINFO("LAST: %4.2f m", range_result);
 	            (*(uint32*)buffer)= instance_tagaddr;
 	            (*(float*)(buffer+4)) = (float)range_result;
