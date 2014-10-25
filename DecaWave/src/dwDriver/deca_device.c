@@ -1143,7 +1143,7 @@ void dwt_geteui(uint8 *eui64) {
 }
 
 //
-// _dwt_otpread - function to read the OTP memory. Ensure that MR,MRa,MRb are reset to 0.
+// _dwt_otpread - function to read the OTP memory. +++
 //
 uint32 _dwt_otpread(uint32 address) {
 	uint8 buf[4];

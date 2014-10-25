@@ -264,13 +264,13 @@ int instancesendpacket(instance_data_t *inst, int delayedTx)
 //
 int testapprun(instance_data_t *inst, int message, uint32 time_ms)
 {
-	//printf("\n\n inst-> testAppState=%d  -> mode=%d  message=%d time_ms %u\n\n",inst->testAppState,inst->mode, message, getmstime()-startTime);
+#ifdef DEBUG_MULTI
 	if( inst->testAppState != inst->prevStateDebug )
 	{
 		PINFO("testAppState: %s message %d time %u",GetStateName(inst->testAppState), message, getmstime()-startTime );
 		inst->prevStateDebug =  inst->testAppState;
 	}
-
+#endif
     switch (inst->testAppState)
     {
         case TA_INIT :
