@@ -19,8 +19,9 @@
 #include "compiler.h"
 #include "spiDriver.h"
 #include "instance_sws.h"
-
+#include "udpClient.h"
 #include "instance.h"
+#include "gpioDriver.h"
 
 
 //Anchor address list
@@ -160,8 +161,11 @@ plConfig_t payloadConfig = { 0xDECA000011223300,         // packetAddress 64 bit
 plConfig_t tempPayloadConfig ;              // a copy for temp update in dialog
 static SpiConfig s_spi;
 int instance_anchaddr = 0;
+int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
+unsigned char* ipAddress;
+int port;
 int instance_mode = ANCHOR;
 int viewClockOffset = 0 ;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
@@ -250,11 +254,13 @@ uint32 getmstime()
 
 static void print_usage(const char *prog)
 {
-	printf("Usage: %s [-drc] [data,..]\n", prog);
-	puts("  -d --device   device to use (default /dev/spidev1.1)\n"
-	     "  -r --role     0 = LISTENER 1 = TAG 2 = ANCHOR\n"
-	     "  -c --channel  channel selection 0-7 like on evkDW1000\n"
-		 "  -p --poll     poll delay in milisec\n"
+	printf("Usage: %s [-drcipt] [data,..]\n", prog);
+	puts("  -d --device   	device to use (default /dev/spidev1.1)\n"
+	     "  -r --role     	0 = LISTENER 1 = TAG 2 = ANCHOR\n"
+	     "  -c --channel  	channel selection 0-7 like on evkDW1000\n"
+		 "  -i --ipAddress  udp server address\n"
+		 "  -p --port 		server listening port"
+		 "  -t --tagID		tag serial number"
 	);
 	exit(1);
 }
@@ -266,12 +272,14 @@ static void parse_opts(int argc, char *argv[])
 			{ "device"	, 1, 0, 'd' },
 			{ "role"	, 1, 0, 'r' },
 			{ "channel"	, 1, 0, 'c' },
-			{ "poll"	, 1, 0, 'p' },
+			{ "ipAddress"	, 1, 0, 'i' },
+			{ "port"	, 1, 0, 'p' },
+			{ "tagID"	, 1, 0, 't' },
 			{ NULL		, 0, 0, 0 	},
 		};
 		int c;
 
-		c = getopt_long(argc, argv, "d:r:c:p:", lopts, NULL);
+		c = getopt_long(argc, argv, "d:r:c:i:p:t:", lopts, NULL);
 
 		if (c == -1)
 			break;
@@ -280,6 +288,9 @@ static void parse_opts(int argc, char *argv[])
 		case 'd':
 			s_spi.device = optarg;
 			break;
+		case 'i':
+					ipAddress = optarg;
+					break;
 		case 'r':
 			instance_mode = (int)strtol(optarg, NULL, 0);
 			break;
@@ -287,8 +298,12 @@ static void parse_opts(int argc, char *argv[])
 			dr_mode = (int)strtol(optarg, NULL, 0);
 			break;
 		case 'p':
-			poll_delay = (int)strtol(optarg, NULL, 0);
+			port = (int)strtol(optarg, NULL, 0);
 			break;
+		case 't':
+			instance_tagaddr = (int)strtol(optarg, NULL, 0);
+			break;
+
 		default:
 			print_usage(argv[0]);
 			break;
@@ -300,6 +315,26 @@ int main(int argc, char *argv[])
 	uint32 status = 0;
 	uint32 states = 0;
 	uint32 time_ms;
+
+	GPIOExport(DW_RESET_PIN);
+	GPIODirection(DW_RESET_PIN,OUT);
+	GPIOWrite( DW_RESET_PIN, LOW );
+
+	GPIOExport(DW_EXT_ON);
+	GPIODirection(DW_EXT_ON,OUT);
+	GPIOWrite( DW_EXT_ON, HIGH );
+
+	//GPIOExport(DW_WAKEUP_PIN);
+	//GPIODirection(DW_WAKEUP_PIN,OUT);
+	//GPIOWrite( DW_WAKEUP_PIN, LOW );
+
+	usleep( 3000 ); //wait 3ms according to datasheet
+
+	GPIOWrite( DW_RESET_PIN, HIGH ); //take out of reset drive to low for reset
+
+	GPIOExport(DW_WAKEUP_PIN);
+	GPIODirection(DW_WAKEUP_PIN,OUT);
+	GPIOWrite( DW_WAKEUP_PIN, LOW );
 
 	s_spi.bits = 8;
 	s_spi.speed = 4500000;
@@ -401,6 +436,10 @@ uint32 inittestapplication( int reset )
 
 	if(instance_mode == ANCHOR)
 	{
+	    if( UdpclinetConnect((const char *)ipAddress, port))
+		{
+			PINFO("udp client failed to init socket");
+		}
 
 	}
 	else
