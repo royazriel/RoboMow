@@ -587,7 +587,7 @@ int main(int argc, char *argv[])
 #endif
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
-	            //PCLS;
+	            PCLS;
 	            PINFO("LAST: %4.2f m", range_result);
 	            (*(uint32*)buffer)= instance_tagaddr;
 	            (*(float*)(buffer+4)) = (float)range_result;

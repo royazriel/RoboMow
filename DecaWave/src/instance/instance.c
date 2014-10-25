@@ -234,11 +234,13 @@ int instancesendpacket(instance_data_t *inst, int delayedTx)
 //
 int testapprun_s(instance_data_t *inst, int message)
 {
+#ifdef DEBUG_MULTI
 	if( message != 0)
 	{
 		PINFO("testAppState: %s message %d time %u",GetCodeName( statesTable,inst->testAppState), message, getmstime()-startTime );
 	}
 	inst->prevStateDebug = inst->testAppState;
+#endif
 
     switch (inst->testAppState)
     {
@@ -1047,7 +1049,9 @@ int testapprun_s(instance_data_t *inst, int message)
 						//non - discovery mode - association is not used, process all messages
 						fcode = fn_code;
 #endif
+#ifdef DEBUG_MULTI
                         PINFO("DWT_SIG_RX_OKAY: fcode = %s",GetCodeName(functionTable,fcode));
+#endif
 						switch(fcode)
                         {
                             case RTLS_DEMO_MSG_RNG_INIT:
@@ -1340,10 +1344,12 @@ int testapprun_s(instance_data_t *inst, int message)
                 //printf("\nERROR - invalid state %d - what is going on??\n", inst->testAppState) ;
             break;
     } // end switch on testAppState
-	if( inst->testAppState != inst->prevStateDebug )
+#ifdef DEBUG_MULTI
+    if( inst->testAppState != inst->prevStateDebug )
 	{
 		PINFO("new state : %s time: %u",GetCodeName( statesTable,inst->testAppState), getmstime()-startTime );
 	}
+#endif
     return inst->done;
 } // end testapprun()
 

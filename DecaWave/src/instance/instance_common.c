@@ -1198,7 +1198,9 @@ int instance_run(void)
 	{
 		while(dwt_checkIRQ()) // check if IRQS bit is active and process any new events
 		{
+#ifdef DEBUG_MULTI
 			PINFO("dwt_isr received time %u",getmstime()-startTime);
+#endif
 			dwt_isr() ;
 		}
 
