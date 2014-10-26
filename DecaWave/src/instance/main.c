@@ -522,6 +522,17 @@ static void parse_opts(int argc, char *argv[])
 		}
 	}
 }
+
+void swap4Bytes( uint8* buf )
+{
+	uint8 tmp = buf[0];
+	buf[0] = buf[3];
+	buf[3]= tmp;
+	tmp = buf[1];
+	buf[1] = buf[2];
+	buf[2] = tmp;
+}
+
 int main(int argc, char *argv[])
 {
 	int toggle = 1;
@@ -590,7 +601,9 @@ int main(int argc, char *argv[])
 	            PCLS;
 	            PINFO("LAST: %4.2f m", range_result);
 	            (*(uint32*)buffer)= instance_tagaddr;
+	            swap4Bytes(buffer);
 	            (*(float*)(buffer+4)) = (float)range_result;
+	            swap4Bytes(buffer+4);
 	            UdpClinetSendReportTOF(buffer, 8);
 
 #if (DR_DISCOVERY == 0)
