@@ -234,7 +234,8 @@ int instaddtagtolist(instance_data_t *inst, uint8 *tagAddr)
         {
             if(memcmp(&inst->tagList[i][0], &blank[0], 8) == 0) //blank entry
             {
-            	PINFO("*****************adding tag to list of found tags*********************************");
+            	PINFO("add tag %x%x%x%x%x%x%X%x",tagAddr[7],tagAddr[6],tagAddr[5],tagAddr[4]
+												,tagAddr[3],tagAddr[2],tagAddr[1],tagAddr[0]);
                 memcpy(&inst->tagList[i][0], &tagAddr[0], 8) ;
                 inst->tagListLen = i + 1 ;
                 break;

@@ -16,6 +16,16 @@ void die(char *s)
     perror(s);
     exit(1);
 }
+
+void swap4Bytes( unsigned char* buf )
+{
+	unsigned char tmp = buf[0];
+	buf[0] = buf[3];
+	buf[3]= tmp;
+	tmp = buf[1];
+	buf[1] = buf[2];
+	buf[2] = tmp;
+}
  
 int main(void)
 {
@@ -55,6 +65,8 @@ int main(void)
         {
             die("recvfrom()");
         }
+        swap4Bytes( buf );
+        swap4Bytes( buf + 4 );
         if( recv_len == 8 )
         {
             id = *(unsigned int*)buf;

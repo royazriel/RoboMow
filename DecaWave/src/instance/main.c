@@ -27,13 +27,19 @@
 #define SOFTWARE_VER_STRING    "Version 2.26    " //
 
 
-//int instance_anchaddr = 0; //0 = 0xDECA020000000001; 1 = 0xDECA020000000002; 2 = 0xDECA020000000003
-//int dr_mode = 0;
-//if instance_mode = TAG_TDOA then the device cannot be selected as anchor
-//int instance_mode = ANCHOR;
-//int instance_mode = TAG;
-//int instance_mode = TAG_TDOA;
-//int instance_mode = LISTENER;
+static SpiConfig s_spi;
+int instance_anchaddr = 0;
+int instance_tagaddr = 0;
+int dr_mode = 0;
+int poll_delay = 0;
+unsigned char* ipAddress;
+int port;
+int instance_mode = ANCHOR;
+int viewClockOffset = 0 ;
+double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
+double antennaDelay16 ;                         // holds antenna delay at 16 MHz PRF
+double antennaDelay64 ;                         // holds antenna delay at 64 MHz PRF
+int initComplete = 0 ;                          // Wait for initialisation before polling status register
 int paused = 0;
 
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
@@ -224,19 +230,7 @@ plConfig_t payloadConfig = { 0xDECA000011223300,         // packetAddress 64 bit
 
 plConfig_t tempPayloadConfig ;              // a copy for temp update in dialog
 #endif
-static SpiConfig s_spi;
-int instance_anchaddr = 0;
-int instance_tagaddr = 0;
-int dr_mode = 0;
-int poll_delay = 0;
-unsigned char* ipAddress;
-int port;
-int instance_mode = ANCHOR;
-int viewClockOffset = 0 ;
-double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
-double antennaDelay16 ;                         // holds antenna delay at 16 MHz PRF
-double antennaDelay64 ;                         // holds antenna delay at 64 MHz PRF
-int initComplete = 0 ;                          // Wait for initialisation before polling status register
+
 
 // Restart and re-configure
 void restartinstance(void)
@@ -598,8 +592,8 @@ int main(int argc, char *argv[])
 #endif
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
-	            PCLS;
-	            PINFO("LAST: %4.2f m", range_result);
+	            //PCLS;
+	            //PINFO("LAST: %4.2f m", range_result);
 	            (*(uint32*)buffer)= instance_tagaddr;
 	            swap4Bytes(buffer);
 	            (*(float*)(buffer+4)) = (float)range_result;
@@ -612,7 +606,7 @@ int main(int argc, char *argv[])
 	            else
 	            	PINFO("%llx", instance_get_anchaddr());
 #else
-	            PINFO("AVG8: %4.2f m", avg_result);
+	            //PINFO("AVG8: %4.2f m", avg_result);
 #endif
 	        }
 

@@ -144,7 +144,7 @@ extern "C" {
 #define BLINK_FRAME_CRTL_AND_ADDRESS    (BLINK_FRAME_SOURCE_ADDRESS + BLINK_FRAME_CTRLP) //10 bytes
 
 #define ANCHOR_LIST_SIZE			(4)
-#define TAG_LIST_SIZE				(1)	//anchor will range with 1st Tag it gets blink from
+#define TAG_LIST_SIZE				(4)	//anchor will range with 1st Tag it gets blink from
 
 #define SEND_TOF_REPORT				(1)	//use this to set sendTOFR2Tag parameter if the anchor sends the report back to the tag
 #define NO_TOF_REPORT				(0)
