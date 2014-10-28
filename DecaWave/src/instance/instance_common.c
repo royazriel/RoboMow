@@ -400,6 +400,7 @@ int instance_init(void)
 
 	// if using auto CRC check (DWT_INT_RFCG and DWT_INT_RFCE) are used instead of DWT_INT_RDFR flag
 	// other errors which need to be checked (as they disable receiver) are
+#if 0
 	if(getSpiHandle() < 0) //this is as Cheetah does not work with interrupts
 	{
 		dwt_setinterrupt(DWT_INT_TFRS | DWT_INT_RFCG | (DWT_INT_ARFE | DWT_INT_RFSL | DWT_INT_SFDT | DWT_INT_RPHE | DWT_INT_RFCE | DWT_INT_RFTO /*| DWT_INT_RXPTO*/), 0);
@@ -408,6 +409,7 @@ int instance_init(void)
 	{
 		dwt_setinterrupt(DWT_INT_TFRS | DWT_INT_RFCG | (DWT_INT_ARFE | DWT_INT_RFSL | DWT_INT_SFDT | DWT_INT_RPHE | DWT_INT_RFCE | DWT_INT_RFTO /*| DWT_INT_RXPTO*/), 1);
 	}
+#endif
     //this is platform dependant - only program if DW EVK/EVB
     dwt_setleds(2) ; //configure the GPIOs which control the leds on EVBs
 
@@ -1197,6 +1199,7 @@ int instance_run(void)
 
 	if(getSpiHandle() > 0) //this is as Cheetah does not work with interrupts
 	{
+
 		while(dwt_checkIRQ()) // check if IRQS bit is active and process any new events
 		{
 #ifdef DEBUG_MULTI

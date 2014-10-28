@@ -33,6 +33,8 @@ int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
 int responseDelay = 150;
+int tagPollSleep = 500;
+uint64 burnAddress = 0;
 unsigned char* ipAddress;
 int port;
 int instance_mode = ANCHOR;
@@ -461,14 +463,17 @@ uint32 getmstime()
 
 static void print_usage(const char *prog)
 {
-        printf("Usage: %s [-drcipt] [data,..]\n", prog);
+        printf("Usage: %s [-drciptsab] [data,..]\n", prog);
         puts("  -d --device     device to use (default /dev/spidev1.1)\n"
              "  -r --role       0 = LISTENER 1 = TAG 2 = ANCHOR\n"
              "  -c --channel    channel selection 0-7 like on evkDW1000\n"
-                 "  -i --ipAddress  udp server address\n"
-                 "  -p --port           server listening port"
-                 "  -t --tagID          tag serial number"
-                 "  -s --response_delay  in milisec"
+			 "  -i --ipAddress  udp server address\n"
+			 "  -p --port           server listening port"
+			 "  -t --tagID          tag serial number"
+			 "  -s --response_delay  in milisec"
+        	 "  -a --tagPollSleep    in milisec"
+        	 "  -b --burnOTPAddress  8byte hex"
+
         );
         exit(1);
 }
@@ -477,18 +482,20 @@ static void parse_opts(int argc, char *argv[])
 {
         while (1) {
                 static const struct option lopts[] = {
-                        { "device"      , 1, 0, 'd' },
-                        { "role"        , 1, 0, 'r' },
-                        { "channel"     , 1, 0, 'c' },
-                        { "ipAddress"   , 1, 0, 'i' },
-                        { "port"        , 1, 0, 'p' },
-                        { "tagID"       , 1, 0, 't' },
+                        { "device"              , 1, 0, 'd' },
+                        { "role"                , 1, 0, 'r' },
+                        { "channel"             , 1, 0, 'c' },
+                        { "ipAddress"           , 1, 0, 'i' },
+                        { "port"                , 1, 0, 'p' },
+                        { "tagID"               , 1, 0, 't' },
                         { "response_delay"      , 1, 0, 's' },
-                        { NULL          , 0, 0, 0       },
+						{ "tagPollSleep"      	, 1, 0, 'a' },
+						{ "burnOTPAddress"      , 1, 0, 'b' },
+                        { NULL          		, 0, 0, 0   },
                 };
                 int c;
 
-                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:a:b:", lopts, NULL);
 
                 if (c == -1)
                         break;
@@ -515,6 +522,14 @@ static void parse_opts(int argc, char *argv[])
                 case 's':
                         responseDelay = (int)strtol(optarg, NULL, 0);
                         break;
+                case 'a':
+						tagPollSleep = (int)strtol(optarg, NULL, 0);
+						break;
+                case 'b':
+						burnAddress = strtoll(optarg, NULL, 16);
+						instance_mode = -1;
+						PINFO("%llx",burnAddress);
+						break;
 
                 default:
                         print_usage(argv[0]);
@@ -573,15 +588,26 @@ int main(int argc, char *argv[])
 	openspi( &s_spi );
 	PINFO( "spi initialized");
 
-
-
-
     if(inittestapplication() == (uint32)-1)
 	{
 		PERROR("init failed");
 		return 0; //error
 	}
-
+    if( burnAddress > 0 )
+    {
+    	int ret = 1;
+    	ret = dwt_otpwriteandverify((uint32)(burnAddress>>32), 0);
+    	if( ret > 0 )
+    	{
+    		PINFO("OTP ADDR 0 burned successfully %x",(uint32)(burnAddress>>32));
+    	}
+    	ret = dwt_otpwriteandverify((uint32)(burnAddress & 0xffffffff), 1);
+		if( ret > 0 )
+		{
+			PINFO("OTP ADDR 1 burned successfully %x", (uint32)(burnAddress & 0xffffffff));
+		}
+    	exit(1);
+    }
     while( 1 )
     {
 		if (initComplete)   // if application is not paused (and initialsiation completed)
@@ -598,8 +624,8 @@ int main(int argc, char *argv[])
 #endif
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
-	            PCLS;
-	            PINFO("LAST: %4.2f m t:%u", range_result,getmstime()-lastReportTime);
+	            //PCLS;
+	            //PINFO("LAST: %4.2f m t:%u", range_result,getmstime()-lastReportTime);
 	            lastReportTime=getmstime();
 	            (*(uint32*)buffer)= instance_tagaddr;
 	            swap4Bytes(buffer);
