@@ -127,10 +127,10 @@ typedef enum inst_states
 	TA_LAST_STATE
 } INST_STATES;
 
-typedef struct _StateString {
+typedef struct _Code2String {
 	uint8 state;
 	uint8 name[30];
-}StateString;
+}Code2String;
 
 // This file defines data and functions for access to Parameters in the Device
 //message structure for Poll, Response and Final message

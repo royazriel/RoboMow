@@ -57,7 +57,7 @@ instance_data_t instance_data[NUM_INST] ;
 extern uint32 getmstime();
 extern uint32 startTime;
 
-StateString statesTable[TA_LAST_STATE] =
+Code2String statesTable[TA_LAST_STATE] =
 {
 	{	TA_INIT,                     "TA_INIT	                  " },
 	{	TA_TXE_WAIT,                 "TA_TXE_WAIT                 " },
@@ -72,18 +72,33 @@ StateString statesTable[TA_LAST_STATE] =
 	{	TA_TXBLINK_WAIT_SEND,        "TA_TXBLINK_WAIT_SEND        " },
 	{	TA_TXRANGINGINIT_WAIT_SEND,  "TA_TXRANGINGINIT_WAIT_SEND  " },
 	{	TA_PAUSED,                   "TA_PAUSED                   " },
-	{	TA_LAST_STATE,                "TA_LAST_STATE               " }
+	{	-1 ,		                 "TA_LAST_STATE               " }
 };
 
-uint8* GetStateName( uint8 stateIndex )
+Code2String functionTable[10] =
 {
-	int i;
-	for( i=0; i< TA_LAST_STATE; i++)
+	{ RTLS_DEMO_MSG_RNG_INIT     , "RTLS_DEMO_MSG_RNG_INIT   "    },
+	{ RTLS_DEMO_MSG_TAG_POLL     , "RTLS_DEMO_MSG_TAG_POLL   "    },
+	{ RTLS_DEMO_MSG_ANCH_RESP    , "RTLS_DEMO_MSG_ANCH_RESP  "    },
+	{ RTLS_DEMO_MSG_TAG_FINAL    , "RTLS_DEMO_MSG_TAG_FINAL  "    },
+//	{ RTLS_DEMO_MSG_ANCH_TOFR    , "RTLS_DEMO_MSG_ANCH_TOFR  "    },
+//	{ RTLS_DEMO_MSG_TAG_POLLF    , "RTLS_DEMO_MSG_TAG_POLLF  "    },
+//	{ RTLS_DEMO_MSG_ANCH_RESPF   , "RTLS_DEMO_MSG_ANCH_RESPF "    },
+//	{ RTLS_DEMO_MSG_TAG_FINALF   , "RTLS_DEMO_MSG_TAG_FINALF "    },
+//	{ RTLS_DEMO_MSG_ANCH_TOFRF   , "RTLS_DEMO_MSG_ANCH_TOFRF "    },
+	{ -1 , "" 													  }
+};
+
+uint8* GetCodeName( Code2String* table, uint8 code )
+{
+	int i=0;
+	while(table[i].state != -1)
 	{
-		if(stateIndex == statesTable[i].state)
+		if( code == table[i].state)
 		{
 			break;
 		}
+		i++;
 	}
 	return statesTable[i].name;
 }
@@ -265,11 +280,11 @@ int instancesendpacket(instance_data_t *inst, int delayedTx)
 int testapprun(instance_data_t *inst, int message, uint32 time_ms)
 {
 #ifdef DEBUG_MULTI
-	if( inst->testAppState != inst->prevStateDebug )
+	if( message != 0)
 	{
-		PINFO("testAppState: %s message %d time %u",GetStateName(inst->testAppState), message, getmstime()-startTime );
-		inst->prevStateDebug =  inst->testAppState;
+		PINFO("testAppState: %s message %d time %u",GetCodeName( statesTable,inst->testAppState), message, getmstime()-startTime );
 	}
+	inst->prevStateDebug = inst->testAppState;
 #endif
     switch (inst->testAppState)
     {
@@ -1170,8 +1185,9 @@ int testapprun(instance_data_t *inst, int message, uint32 time_ms)
 						fcode = fn_code;
 #endif
 
-						//PINFO("fcode %d period %u",fcode,getmstime()-lastReport);
-						//lastReport = getmstime();
+#ifdef DEBUG_MULTI
+                        PINFO("DWT_SIG_RX_OKAY: fcode = %s",GetCodeName(functionTable,fcode));
+#endif
                         switch(fcode)
                         {
 							case RTLS_DEMO_MSG_RNG_INIT:
@@ -1490,7 +1506,12 @@ int testapprun(instance_data_t *inst, int message, uint32 time_ms)
                 printf("\nERROR - invalid state %d - what is going on??\n", inst->testAppState) ;
             break;
     } // end switch on testAppState
-
+#ifdef DEBUG_MULTI
+    if( inst->testAppState != inst->prevStateDebug )
+	{
+		PINFO("new state : %s time: %u",GetCodeName( statesTable,inst->testAppState), getmstime()-startTime );
+	}
+#endif
     return inst->done;
 } // end testapprun()
 

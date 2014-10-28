@@ -145,7 +145,7 @@ typedef struct
 	int tagBlinkSleepDuration ;
     int anchorSendReports ;
 	int responseDelay ;
-} plConfig_t ;
+}plConfig_t ;
 
 plConfig_t payloadConfig = { 0xDECA000011223300,         // packetAddress 64 bit extended address
                             "",							 // payload string - probably will initialise to empty string
@@ -165,6 +165,7 @@ int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
 unsigned char* ipAddress;
+int responseDelay;
 int port;
 int instance_mode = ANCHOR;
 int viewClockOffset = 0 ;
@@ -261,6 +262,7 @@ static void print_usage(const char *prog)
 		 "  -i --ipAddress  udp server address\n"
 		 "  -p --port 		server listening port"
 		 "  -t --tagID		tag serial number"
+		 "  -s --response_delay  in milisec"
 	);
 	exit(1);
 }
@@ -275,11 +277,12 @@ static void parse_opts(int argc, char *argv[])
 			{ "ipAddress"	, 1, 0, 'i' },
 			{ "port"	, 1, 0, 'p' },
 			{ "tagID"	, 1, 0, 't' },
+			{ "response_delay"	, 1, 0, 's' },
 			{ NULL		, 0, 0, 0 	},
 		};
 		int c;
 
-		c = getopt_long(argc, argv, "d:r:c:i:p:t:", lopts, NULL);
+		c = getopt_long(argc, argv, "d:r:c:i:p:t:s:", lopts, NULL);
 
 		if (c == -1)
 			break;
@@ -302,6 +305,9 @@ static void parse_opts(int argc, char *argv[])
 			break;
 		case 't':
 			instance_tagaddr = (int)strtol(optarg, NULL, 0);
+			break;
+		case 's':
+			responseDelay = (int)strtol(optarg, NULL, 0);
 			break;
 
 		default:
@@ -491,10 +497,9 @@ uint32 inittestapplication( int reset )
 
 	payloadconfigure() ;                            // set up initial payload configuration
 
-	instancesettagsleepdelay(payloadConfig.tagSleepDuration, payloadConfig.tagBlinkSleepDuration) ;
+	instancesetblinkreplydelay(responseDelay);
+	instancesetreplydelay( responseDelay, 0) ;
 
-	instancesetblinkreplydelay(payloadConfig.responseDelay);
-	instancesetreplydelay(payloadConfig.responseDelay, 0) ;
 
 	instancesetreporting(payloadConfig.anchorSendReports) ;     // Set whether anchor instance sends reports
 
