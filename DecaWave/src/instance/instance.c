@@ -44,6 +44,7 @@
 instance_data_t instance_data[NUM_INST] ;
 extern uint32 getmstime();
 extern uint32 startTime;
+extern int responseDelay;
 
 Code2String statesTable[TA_LAST_STATE] =
 {
@@ -903,7 +904,7 @@ int testapprun_s(instance_data_t *inst, int message)
                                 inst->tagShortAdd = (dwt_getpartid() & 0xFF);
 								inst->tagShortAdd =  (inst->tagShortAdd << 8) + dw_event->msgu.rxblinkmsg.tagID[0] ;
 
-								if(inst->fixedReplyDelay_ms != FIXED_REPLY_DELAY)
+								if(inst->fixedReplyDelay_ms != responseDelay /*FIXED_REPLY_DELAY*/)
                                 {
 									inst->delayedReplyTime = dw_event->timeStamp + convertmicrosectodevicetimeu(FIXED_LONG_BLINK_RESPONSE_DELAY * 1000.0) ;  // time we should send the blink response
                                 }
@@ -1523,8 +1524,8 @@ void instancesetreplydelay(int delayms, int datalength) //delay in ms
 		//this it the delay used for configuring the receiver on delay (wait for response delay),
 		instance_data[instance].fixedReplyDelay_sy = (int) (delayms * 1000 / 1.0256) - 16 - (int)((preamblelen + (msgdatalen/1000.0))/ 1.0256); //subtract 16 symbols, as receiver has a 16 symbol start up time
             }
-	//printf("preamble %4.3fus, Final msg %4.3fus\n", preamblelen, msgdatalen/1000);
-	//printf("Set response delay time to %d ms, %d sym payload %d\n", (int) delayms, instance_data[instance].fixedReplyDelay_sy, instance_data[instance].payload.payloadLen);
+		PINFO("preamble %4.3fus, Final msg %4.3fus\n", preamblelen, msgdatalen/1000);
+		PINFO("Set response delay time to %d ms, %d sym payload %d\n", (int) delayms, instance_data[instance].fixedReplyDelay_sy,0 /*instance_data[instance].payload.payloadLen*/);
             }
 
 // -------------------------------------------------------------------------------------------------------------------

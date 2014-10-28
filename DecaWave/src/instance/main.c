@@ -32,6 +32,7 @@ int instance_anchaddr = 0;
 int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
+int responseDelay = 150;
 unsigned char* ipAddress;
 int port;
 int instance_mode = ANCHOR;
@@ -41,7 +42,7 @@ double antennaDelay16 ;                         // holds antenna delay at 16 MHz
 double antennaDelay64 ;                         // holds antenna delay at 64 MHz PRF
 int initComplete = 0 ;                          // Wait for initialisation before polling status register
 int paused = 0;
-
+int lastReportTime;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
 
 
@@ -380,11 +381,11 @@ uint32 inittestapplication()
 		}
 		else //this is for ARM to ARM tag/anchor (using normal response times 150ms)
 		{
-			instancesetblinkreplydelay(FIXED_REPLY_DELAY);
+			instancesetblinkreplydelay(responseDelay/*FIXED_REPLY_DELAY*/);
 		}
 
 		//set the default response delays
-		instancesetreplydelay(FIXED_REPLY_DELAY, 0);
+		instancesetreplydelay(responseDelay/*FIXED_REPLY_DELAY*/, 0);
       }
 
 #if HOST_DEMO
@@ -460,61 +461,66 @@ uint32 getmstime()
 
 static void print_usage(const char *prog)
 {
-	printf("Usage: %s [-drcipt] [data,..]\n", prog);
-	puts("  -d --device   	device to use (default /dev/spidev1.1)\n"
-	     "  -r --role     	0 = LISTENER 1 = TAG 2 = ANCHOR\n"
-	     "  -c --channel  	channel selection 0-7 like on evkDW1000\n"
-		 "  -i --ipAddress  udp server address\n"
-		 "  -p --port 		server listening port"
-		 "  -t --tagID		tag serial number"
-	);
-	exit(1);
+        printf("Usage: %s [-drcipt] [data,..]\n", prog);
+        puts("  -d --device     device to use (default /dev/spidev1.1)\n"
+             "  -r --role       0 = LISTENER 1 = TAG 2 = ANCHOR\n"
+             "  -c --channel    channel selection 0-7 like on evkDW1000\n"
+                 "  -i --ipAddress  udp server address\n"
+                 "  -p --port           server listening port"
+                 "  -t --tagID          tag serial number"
+                 "  -s --response_delay  in milisec"
+        );
+        exit(1);
 }
 
 static void parse_opts(int argc, char *argv[])
 {
-	while (1) {
-		static const struct option lopts[] = {
-			{ "device"	, 1, 0, 'd' },
-			{ "role"	, 1, 0, 'r' },
-			{ "channel"	, 1, 0, 'c' },
-			{ "ipAddress"	, 1, 0, 'i' },
-			{ "port"	, 1, 0, 'p' },
-			{ "tagID"	, 1, 0, 't' },
-			{ NULL		, 0, 0, 0 	},
-		};
-		int c;
+        while (1) {
+                static const struct option lopts[] = {
+                        { "device"      , 1, 0, 'd' },
+                        { "role"        , 1, 0, 'r' },
+                        { "channel"     , 1, 0, 'c' },
+                        { "ipAddress"   , 1, 0, 'i' },
+                        { "port"        , 1, 0, 'p' },
+                        { "tagID"       , 1, 0, 't' },
+                        { "response_delay"      , 1, 0, 's' },
+                        { NULL          , 0, 0, 0       },
+                };
+                int c;
 
-		c = getopt_long(argc, argv, "d:r:c:i:p:t:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:", lopts, NULL);
 
-		if (c == -1)
-			break;
+                if (c == -1)
+                        break;
 
-		switch (c) {
-		case 'd':
-			s_spi.device = optarg;
-			break;
-		case 'i':
-					ipAddress = optarg;
-					break;
-		case 'r':
-			instance_mode = (int)strtol(optarg, NULL, 0);
-			break;
-		case 'c':
-			dr_mode = (int)strtol(optarg, NULL, 0);
-			break;
-		case 'p':
-			port = (int)strtol(optarg, NULL, 0);
-			break;
-		case 't':
-			instance_tagaddr = (int)strtol(optarg, NULL, 0);
-			break;
+                switch (c) {
+                case 'd':
+                        s_spi.device = optarg;
+                        break;
+                case 'i':
+                                        ipAddress = optarg;
+                                        break;
+                case 'r':
+                        instance_mode = (int)strtol(optarg, NULL, 0);
+                        break;
+                case 'c':
+                        dr_mode = (int)strtol(optarg, NULL, 0);
+                        break;
+                case 'p':
+                        port = (int)strtol(optarg, NULL, 0);
+                        break;
+                case 't':
+                        instance_tagaddr = (int)strtol(optarg, NULL, 0);
+                        break;
+                case 's':
+                        responseDelay = (int)strtol(optarg, NULL, 0);
+                        break;
 
-		default:
-			print_usage(argv[0]);
-			break;
-		}
-	}
+                default:
+                        print_usage(argv[0]);
+                        break;
+                }
+        }
 }
 
 void swap4Bytes( uint8* buf )
@@ -592,8 +598,9 @@ int main(int argc, char *argv[])
 #endif
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
-	            //PCLS;
-	            //PINFO("LAST: %4.2f m", range_result);
+	            PCLS;
+	            PINFO("LAST: %4.2f m t:%u", range_result,getmstime()-lastReportTime);
+	            lastReportTime=getmstime();
 	            (*(uint32*)buffer)= instance_tagaddr;
 	            swap4Bytes(buffer);
 	            (*(float*)(buffer+4)) = (float)range_result;
