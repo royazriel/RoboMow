@@ -33,6 +33,7 @@ int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
 int responseDelay = 150;
+uint32 txPower = 0x1f1f1f1f;
 int tagPollSleep = 500;
 uint64 burnAddress = 0;
 unsigned char* ipAddress;
@@ -473,6 +474,7 @@ static void print_usage(const char *prog)
 			 "  -s --response_delay  in milisec"
         	 "  -a --tagPollSleep    in milisec"
         	 "  -b --burnOTPAddress  8byte hex"
+        	 "  -x --txPower         tx power"
 
         );
         exit(1);
@@ -491,11 +493,12 @@ static void parse_opts(int argc, char *argv[])
                         { "response_delay"      , 1, 0, 's' },
 						{ "tagPollSleep"      	, 1, 0, 'a' },
 						{ "burnOTPAddress"      , 1, 0, 'b' },
+						{ "txPower		 "      , 1, 0, 'x' },
                         { NULL          		, 0, 0, 0   },
                 };
                 int c;
 
-                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:a:b:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:a:b:x:", lopts, NULL);
 
                 if (c == -1)
                         break;
@@ -529,6 +532,9 @@ static void parse_opts(int argc, char *argv[])
 						burnAddress = strtoll(optarg, NULL, 16);
 						instance_mode = -1;
 						PINFO("%llx",burnAddress);
+						break;
+                case 'x':
+						txPower = (uint32)strtol(optarg, NULL, 0);
 						break;
 
                 default:

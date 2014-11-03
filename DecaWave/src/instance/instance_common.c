@@ -19,6 +19,7 @@
 //uint32 ptime = 0;
 extern uint32 getmstime();
 extern uint32 startTime;
+extern uint32 txPower;
 // -------------------------------------------------------------------------------------------------------------------
 //      Data Definitions
 // -------------------------------------------------------------------------------------------------------------------
@@ -504,8 +505,10 @@ void instance_config(instanceConfig_t *config)
     }
 	else //if the smart power is not used, then the low byte value (repeated) is used for the whole TX power register
     {
-        uint8 pow = power & 0xFF ;
+        //uint8 pow = power & 0xFF ;
+        uint8 pow  = txPower & 0xFF;
         instance_data[instance].configTX.power = (pow | (pow << 8) | (pow << 16) | (pow << 24));
+        PINFO("TX POWER SET TO: 0x%x",instance_data[instance].configTX.power);
     }
     dwt_setsmarttxpower(instance_data[instance].configData.smartPowerEn);
 
