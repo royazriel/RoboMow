@@ -165,7 +165,8 @@ int instance_tagaddr = 0;
 int dr_mode = 0;
 int poll_delay = 0;
 unsigned char* ipAddress;
-int responseDelay;
+int responseDelay = 150;
+uint32 txPower = 0x1f1f1f1f;
 int port;
 int instance_mode = ANCHOR;
 int viewClockOffset = 0 ;
@@ -263,6 +264,7 @@ static void print_usage(const char *prog)
 		 "  -p --port 		server listening port"
 		 "  -t --tagID		tag serial number"
 		 "  -s --response_delay  in milisec"
+		 "  -x --txPower         tx power"
 	);
 	exit(1);
 }
@@ -278,11 +280,12 @@ static void parse_opts(int argc, char *argv[])
 			{ "port"	, 1, 0, 'p' },
 			{ "tagID"	, 1, 0, 't' },
 			{ "response_delay"	, 1, 0, 's' },
+			{ "txPower"      , 1, 0, 'x' },
 			{ NULL		, 0, 0, 0 	},
 		};
 		int c;
 
-		c = getopt_long(argc, argv, "d:r:c:i:p:t:s:", lopts, NULL);
+		c = getopt_long(argc, argv, "d:r:c:i:p:t:s:x:", lopts, NULL);
 
 		if (c == -1)
 			break;
@@ -309,6 +312,10 @@ static void parse_opts(int argc, char *argv[])
 		case 's':
 			responseDelay = (int)strtol(optarg, NULL, 0);
 			break;
+		case 'x':
+			txPower = (uint32)strtol(optarg, NULL, 0);
+			break;
+
 
 		default:
 			print_usage(argv[0]);
