@@ -335,7 +335,7 @@ uint32 inittestapplication()
 		instance_init_f(instance_mode); //initialise Fast 2WR specific data
 		//when using fast ranging the channel config is either mode 2 or mode 6
 		//default is mode 2
-		dr_mode = decarangingmode();
+		//dr_mode = decarangingmode();
 
 		if((dr_mode & 0x1) == 0)
 			dr_mode = 1;
@@ -343,7 +343,7 @@ uint32 inittestapplication()
 	else
 	{
 		instance_init_s(instance_mode);
-		dr_mode = decarangingmode();
+		//dr_mode = decarangingmode();
 	}
 
     instConfig.channelNumber = chConfig[dr_mode].channel ;
@@ -631,7 +631,7 @@ int main(int argc, char *argv[])
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
 	            //PCLS;
-	            //PINFO("LAST: %4.2f m t:%u", range_result,getmstime()-lastReportTime);
+	            PINFO("**************************************************LAST: %4.2f m t:%u **************************************************", range_result,getmstime()-lastReportTime);
 	            lastReportTime=getmstime();
 	            (*(uint32*)buffer)= instance_tagaddr;
 	            swap4Bytes(buffer);
