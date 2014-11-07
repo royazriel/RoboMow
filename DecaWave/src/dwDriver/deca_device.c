@@ -1875,8 +1875,8 @@ int _dwt_loaducodefromrom(void)
     wr_buf[0] = 0x01;
     dwt_writetodevice(PMSC_ID, PMSC_CTRL0_OFFSET, 2, wr_buf);
     //kick off the NV MEM load
-    dwt_write32bitoffsetreg(OTP_IF_ID, OTP_CTRL, OTP_CTRL_LDELOAD); // set load LDE kick bit
-
+    //dwt_write32bitoffsetreg(OTP_IF_ID, OTP_CTRL, OTP_CTRL_LDELOAD); // set load LDE kick bit
+    dwt_write16bitoffsetreg(OTP_IF_ID, OTP_CTRL, OTP_CTRL_LDELOAD); // set load LDE kick bit
     Sleep(1); // Allow time for code to upload (should take up to 120 us)
 
     //default clocks

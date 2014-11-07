@@ -360,17 +360,16 @@ int instance_init(void)
     //uint16 temp = 0;
 
     instance_data[instance].mode =  ANCHOR;                                // assume listener,
-
+    instance_data[instance].testAppState = TA_INIT ;
     instance_data[instance].instToSleep = 0;
 
     instance_data[instance].sentSN = 0;
-
     instance_data[instance].tofindex = 0;
     instance_data[instance].tofcount = 0;
 
     // Reset the IC (might be needed if not getting here from POWER ON)
     // ARM code: Remove soft reset here as using hard reset in the inittestapplication() in the main.c file
-    //dwt_softreset();
+    dwt_softreset();
 
 #if (DEEP_SLEEP_AUTOWAKEUP == 1)
 	uint16 blinktime  = 0xf; //e.g. blink time to be used for the Tag auto wake up

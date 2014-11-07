@@ -637,7 +637,10 @@ int main(int argc, char *argv[])
 	            swap4Bytes(buffer);
 	            (*(float*)(buffer+4)) = (float)range_result;
 	            swap4Bytes(buffer+4);
-	            UdpClinetSendReportTOF(buffer, 8);
+	            if( instance_mode == ANCHOR )
+	            {
+	            	UdpClinetSendReportTOF(buffer, 8);
+	            }
 
 #if (DR_DISCOVERY == 0)
 	            if(instance_mode == ANCHOR)
