@@ -24,7 +24,7 @@ extern "C" {
 /******************************************************************************************************************
 ********************* NOTES on DW (MP) features/options ***********************************************************
 *******************************************************************************************************************/
-#define DEEP_SLEEP (1) //To enable deep-sleep set this to 1
+#define DEEP_SLEEP (0) //To enable deep-sleep set this to 1
 //DEEP_SLEEP mode can be used, for example, by a Tag instance to put the DW1000 into low-power deep-sleep mode, there are two cases:
 // 1. when the Anchor is sending the range report back to the Tag, the Tag will enter sleep after a ranging exchange is finished
 // once it receives a report or times out, before the next poll message is sent (before next ranging exchange is started).
