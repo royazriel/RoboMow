@@ -31,8 +31,9 @@ static SpiConfig s_spi;
 int instance_anchaddr = 0;
 int instance_tagaddr = 0;
 int dr_mode = 0;
-int poll_delay = 0;
 int responseDelay = 150;
+int pollDelay = POLL_SLEEP_DELAY;
+int blinkDelay = BLINK_SLEEP_DELAY;
 uint32 txPower = 0x1f1f1f1f;
 int tagPollSleep = 500;
 uint64 burnAddress = 0;
@@ -363,7 +364,7 @@ uint32 inittestapplication()
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
 #endif
-    instancesettagsleepdelay(POLL_SLEEP_DELAY, BLINK_SLEEP_DELAY); //set the Tag sleep time
+    instancesettagsleepdelay(pollDelay, blinkDelay); //set the Tag sleep time
 
     //if TA_SW1_2 is on use fast ranging (fast 2wr)
       if( 0 /*is_fastrng_on(0) == S1_SWITCH_ON*/)
@@ -465,16 +466,18 @@ uint32 getmstime()
 static void print_usage(const char *prog)
 {
         printf("Usage: %s [-drciptsab] [data,..]\n", prog);
-        puts("  -d --device     device to use (default /dev/spidev1.1)\n"
-             "  -r --role       0 = LISTENER 1 = TAG 2 = ANCHOR\n"
-             "  -c --channel    channel selection 0-7 like on evkDW1000\n"
-			 "  -i --ipAddress  udp server address\n"
-			 "  -p --port           server listening port"
-			 "  -t --tagID          tag serial number"
-			 "  -s --response_delay  in milisec"
-        	 "  -a --tagPollSleep    in milisec"
-        	 "  -b --burnOTPAddress  8byte hex"
-        	 "  -x --txPower         tx power"
+        puts("  -d --device     		device to use (default /dev/spidev1.1)\n"
+             "  -r --role       		0 = LISTENER 1 = TAG 2 = ANCHOR\n"
+             "  -c --channel    		channel selection 0-7 like on evkDW1000\n"
+			 "  -i --ipAddress  		udp server address\n"
+			 "  -p --port           	server listening port\n"
+			 "  -t --tagID          	tag serial number\n"
+			 "  -s --response_delay  	in milisec\n"
+        	 "  -a --tagPollSleep    	in milisec\n"
+        	 "  -b --burnOTPAddress  	8byte hex\n"
+        	 "  -x --txPower         	tx power\n"
+        	 "  -w --pollDelay       	in milisec\n"
+        	 "  -y --bliinkDelay       	in milisec\n"
 
         );
         exit(1);
@@ -494,52 +497,61 @@ static void parse_opts(int argc, char *argv[])
 						{ "tagPollSleep"      	, 1, 0, 'a' },
 						{ "burnOTPAddress"      , 1, 0, 'b' },
 						{ "txPower		 "      , 1, 0, 'x' },
+						{ "pollDelay	 "      , 1, 0, 'w' },
+						{ "blinkDelay	 "      , 1, 0, 'y' },
                         { NULL          		, 0, 0, 0   },
                 };
                 int c;
 
-                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:a:b:x:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:a:b:x:w:y:", lopts, NULL);
 
                 if (c == -1)
-                        break;
+                       break;
 
-                switch (c) {
-                case 'd':
-                        s_spi.device = optarg;
-                        break;
-                case 'i':
-                                        ipAddress = optarg;
-                                        break;
-                case 'r':
-                        instance_mode = (int)strtol(optarg, NULL, 0);
-                        break;
-                case 'c':
-                        dr_mode = (int)strtol(optarg, NULL, 0);
-                        break;
-                case 'p':
-                        port = (int)strtol(optarg, NULL, 0);
-                        break;
-                case 't':
-                        instance_tagaddr = (int)strtol(optarg, NULL, 0);
-                        break;
-                case 's':
-                        responseDelay = (int)strtol(optarg, NULL, 0);
-                        break;
-                case 'a':
-						tagPollSleep = (int)strtol(optarg, NULL, 0);
-						break;
-                case 'b':
-						burnAddress = strtoll(optarg, NULL, 16);
-						instance_mode = -1;
-						PINFO("%llx",burnAddress);
-						break;
-                case 'x':
-						txPower = (uint32)strtol(optarg, NULL, 0);
-						break;
+                switch (c)
+                {
+					case 'd':
+							s_spi.device = optarg;
+							break;
+					case 'i':
+							ipAddress = optarg;
+							break;
+					case 'r':
+							instance_mode = (int)strtol(optarg, NULL, 0);
+							break;
+					case 'c':
+							dr_mode = (int)strtol(optarg, NULL, 0);
+							break;
+					case 'p':
+							port = (int)strtol(optarg, NULL, 0);
+							break;
+					case 't':
+							instance_tagaddr = (int)strtol(optarg, NULL, 0);
+							break;
+					case 's':
+							responseDelay = (int)strtol(optarg, NULL, 0);
+							break;
+					case 'a':
+							tagPollSleep = (int)strtol(optarg, NULL, 0);
+							break;
+					case 'b':
+							burnAddress = strtoll(optarg, NULL, 16);
+							instance_mode = -1;
+							PINFO("%llx",burnAddress);
+							break;
+					case 'x':
+							txPower = (uint32)strtol(optarg, NULL, 0);
+							break;
+					case 'w':
+							pollDelay = (int)strtol(optarg, NULL, 0);
+							break;
+					case 'y':
+							blinkDelay = (int)strtol(optarg, NULL, 0);
+							break;
 
-                default:
-                        print_usage(argv[0]);
-                        break;
+					default:
+							print_usage(argv[0]);
+							break;
                 }
         }
 }
@@ -589,6 +601,11 @@ int main(int argc, char *argv[])
 	s_spi.toggle_cs = 0;
 	s_spi.device = "/dev/spidev0.0";
 
+	if( argc == 1)
+	{
+		print_usage(argv[0]);
+		exit(1);
+	}
 	parse_opts(argc, argv);
 
 	openspi( &s_spi );
