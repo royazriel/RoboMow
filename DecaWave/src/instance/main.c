@@ -35,7 +35,6 @@ int responseDelay = 150;
 int pollDelay = POLL_SLEEP_DELAY;
 int blinkDelay = BLINK_SLEEP_DELAY;
 uint32 txPower = 0x1f1f1f1f;
-int tagPollSleep = 500;
 uint64 burnAddress = 0;
 unsigned char* ipAddress;
 int port;
@@ -347,7 +346,7 @@ uint32 inittestapplication()
 		//dr_mode = decarangingmode();
 	}
 
-    instConfig.channelNumber = chConfig[dr_mode].channel ;
+    instConfig.channelNumber = chConfig[dr_mode].channel;
     instConfig.preambleCode = chConfig[dr_mode].preambleCode ;
     instConfig.pulseRepFreq = chConfig[dr_mode].prf ;
     instConfig.pacSize = chConfig[dr_mode].pacSize ;
@@ -473,7 +472,6 @@ static void print_usage(const char *prog)
 			 "  -p --port           	server listening port\n"
 			 "  -t --tagID          	tag serial number\n"
 			 "  -s --response_delay  	in milisec\n"
-        	 "  -a --tagPollSleep    	in milisec\n"
         	 "  -b --burnOTPAddress  	8byte hex\n"
         	 "  -x --txPower         	tx power\n"
         	 "  -w --pollDelay       	in milisec\n"
@@ -494,7 +492,6 @@ static void parse_opts(int argc, char *argv[])
                         { "port"                , 1, 0, 'p' },
                         { "tagID"               , 1, 0, 't' },
                         { "response_delay"      , 1, 0, 's' },
-						{ "tagPollSleep"      	, 1, 0, 'a' },
 						{ "burnOTPAddress"      , 1, 0, 'b' },
 						{ "txPower		 "      , 1, 0, 'x' },
 						{ "pollDelay	 "      , 1, 0, 'w' },
@@ -530,9 +527,6 @@ static void parse_opts(int argc, char *argv[])
 							break;
 					case 's':
 							responseDelay = (int)strtol(optarg, NULL, 0);
-							break;
-					case 'a':
-							tagPollSleep = (int)strtol(optarg, NULL, 0);
 							break;
 					case 'b':
 							burnAddress = strtoll(optarg, NULL, 16);

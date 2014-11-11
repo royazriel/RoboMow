@@ -89,7 +89,7 @@ uint8* GetCodeName( Code2String* table, uint8 code )
 		}
 		i++;
 	}
-	return statesTable[i].name;
+	return table[i].name;
 }
 // -------------------------------------------------------------------------------------------------------------------
 // Functions
@@ -893,6 +893,7 @@ int testapprun_s(instance_data_t *inst, int message)
 						inst->canprintinfo = 1;
 
                         //add this Tag to the list of Tags we know about
+
 						instaddtagtolist(inst, &(dw_event->msgu.rxblinkmsg.tagID[0]));
 
                         //initiate ranging message

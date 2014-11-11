@@ -870,7 +870,10 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 		
 			dwt_readrxdata((uint8 *)&dw_event.msgu.frame[0], rxd->datalength, 0);  // Read Data Frame
 			//dwt_readdignostics(&instance_data[instance].dwlogdata.diag);
-
+			if( rxd_event == SIG_RX_BLINK )
+			{
+				PINFO("blink message from %llx",*(uint64*)&dw_event.msgu.rxblinkmsg.tagID);
+			}
 			if(dwt_checkoverrun()) //the overrun has occured while we were reading the data - dump the frame/data
 			{
 				rxd_event = DWT_SIG_RX_ERROR ;
