@@ -32,8 +32,7 @@ int instance_anchaddr = 0;
 int instance_tagaddr = 0;
 int dr_mode = 0;
 int responseDelay = 150;
-int pollDelay = POLL_SLEEP_DELAY;
-int blinkDelay = BLINK_SLEEP_DELAY;
+
 uint32 txPower = 0x1f1f1f1f;
 uint64 burnAddress = 0;
 unsigned char* ipAddress;
@@ -194,7 +193,7 @@ void addressconfigure(void)
     ipc.anchorAddress = anchorAddressList[instance_anchaddr];
     ipc.anchorAddressList = anchorAddressList;
     ipc.anchorListSize = ANCHOR_LIST_SIZE ;
-    ipc.anchorPollMask = 0x1; //0x7;              // anchor poll mask
+    ipc.anchorPollMask = 0x3;              // anchor poll mask
 
     ipc.sendReport = 1 ;  //1 => anchor sends TOF report to tag
     //ipc.sendReport = 2 ;  //2 => anchor sends TOF report to listener
@@ -310,7 +309,7 @@ uint32 inittestapplication()
 	if(instance_mode == LISTENER) instcleartaglist();
 
 
-	if(instance_mode == ANCHOR)
+	if(instance_mode == TAG)
 	{
 		if( UdpclinetConnect((const char *)ipAddress, port))
 		{
@@ -363,7 +362,7 @@ uint32 inittestapplication()
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
 #endif
-    instancesettagsleepdelay(pollDelay, blinkDelay); //set the Tag sleep time
+    instancesettagsleepdelay( POLL_SLEEP_DELAY, BLINK_SLEEP_DELAY); //set the Tag sleep time
 
     //if TA_SW1_2 is on use fast ranging (fast 2wr)
       if( 0 /*is_fastrng_on(0) == S1_SWITCH_ON*/)
@@ -474,8 +473,6 @@ static void print_usage(const char *prog)
 			 "  -s --response_delay  	in milisec\n"
         	 "  -b --burnOTPAddress  	8byte hex\n"
         	 "  -x --txPower         	tx power\n"
-        	 "  -w --pollDelay       	in milisec\n"
-        	 "  -y --bliinkDelay       	in milisec\n"
 
         );
         exit(1);
@@ -490,17 +487,15 @@ static void parse_opts(int argc, char *argv[])
                         { "channel"             , 1, 0, 'c' },
                         { "ipAddress"           , 1, 0, 'i' },
                         { "port"                , 1, 0, 'p' },
-                        { "tagID"               , 1, 0, 't' },
+                        { "anchorID"            , 1, 0, 'a' },
                         { "response_delay"      , 1, 0, 's' },
 						{ "burnOTPAddress"      , 1, 0, 'b' },
 						{ "txPower		 "      , 1, 0, 'x' },
-						{ "pollDelay	 "      , 1, 0, 'w' },
-						{ "blinkDelay	 "      , 1, 0, 'y' },
                         { NULL          		, 0, 0, 0   },
                 };
                 int c;
 
-                c = getopt_long(argc, argv, "d:r:c:i:p:t:s:a:b:x:w:y:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:a:s:b:x:", lopts, NULL);
 
                 if (c == -1)
                        break;
@@ -522,8 +517,8 @@ static void parse_opts(int argc, char *argv[])
 					case 'p':
 							port = (int)strtol(optarg, NULL, 0);
 							break;
-					case 't':
-							instance_tagaddr = (int)strtol(optarg, NULL, 0);
+					case 'a':
+							instance_anchaddr = (int)strtol(optarg, NULL, 0);
 							break;
 					case 's':
 							responseDelay = (int)strtol(optarg, NULL, 0);
@@ -535,12 +530,6 @@ static void parse_opts(int argc, char *argv[])
 							break;
 					case 'x':
 							txPower = (uint32)strtol(optarg, NULL, 0);
-							break;
-					case 'w':
-							pollDelay = (int)strtol(optarg, NULL, 0);
-							break;
-					case 'y':
-							blinkDelay = (int)strtol(optarg, NULL, 0);
 							break;
 
 					default:
@@ -644,11 +633,12 @@ int main(int argc, char *argv[])
 	            //PCLS;
 	            PINFO("**************************************************LAST: %4.2f m t:%u **************************************************", range_result,getmstime()-lastReportTime);
 	            lastReportTime=getmstime();
-	            (*(uint32*)buffer)= instance_tagaddr;
+	            uint64 id = instance_get_anchaddr();
+	            (*(uint32*)buffer)= (uint32)id;
 	            swap4Bytes(buffer);
 	            (*(float*)(buffer+4)) = (float)range_result;
 	            swap4Bytes(buffer+4);
-	            if( instance_mode == ANCHOR )
+	            if( instance_mode == TAG )
 	            {
 	            	UdpClinetSendReportTOF(buffer, 8);
 	            }

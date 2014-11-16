@@ -1590,6 +1590,8 @@ uint64 instance_get_tagaddr(void) //get own address
 uint64 instance_get_anchaddr(void) //get anchor address (that sent the ToF)
 {
     int instance = 0;
+    uint64 x = *(uint64*)&instance_data[instance].relpyAddress[0];
+#if 0
     uint64 x = (uint64) instance_data[instance].relpyAddress[0];
     x |= (uint64) instance_data[instance].relpyAddress[1] << 8;
     x |= (uint64) instance_data[instance].relpyAddress[2] << 16;
@@ -1598,6 +1600,7 @@ uint64 instance_get_anchaddr(void) //get anchor address (that sent the ToF)
     x |= (uint64) instance_data[instance].relpyAddress[5] << 40;
     x |= (uint64) instance_data[instance].relpyAddress[6] << 48;
     x |= (uint64) instance_data[instance].relpyAddress[7] << 56;
+#endif
     return (x);
 }
 

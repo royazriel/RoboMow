@@ -47,7 +47,7 @@ extern "C" {
 #define DOUBLE_RX_BUFFER (0) //To enable double RX buffer set this to 1 - this only works for the Listener instance
 //NOTE: this feature is really meant for a RX only instance, as TX will not be possible while double-buffer and auto rx-enable is on.
 
-#define DR_DISCOVERY	(1) //to use discovery ranging mode (tag will blink until it receives ranging request from an anchor)
+#define DR_DISCOVERY	(0) //to use discovery ranging mode (tag will blink until it receives ranging request from an anchor)
 							//after which it will pair with that anchor and start ranging exchange
 
 #define CORRECT_RANGE_BIAS  (1)     // Compensate for small bias due to uneven accumulator growth at close up high power
@@ -143,8 +143,8 @@ extern "C" {
 #define BLINK_FRAME_CTRLP				(BLINK_FRAME_CONTROL_BYTES + BLINK_FRAME_SEQ_NUM_BYTES) //2
 #define BLINK_FRAME_CRTL_AND_ADDRESS    (BLINK_FRAME_SOURCE_ADDRESS + BLINK_FRAME_CTRLP) //10 bytes
 
-#define ANCHOR_LIST_SIZE			(4)
-#define TAG_LIST_SIZE				(4)	//anchor will range with 1st Tag it gets blink from
+#define ANCHOR_LIST_SIZE			(2)
+#define TAG_LIST_SIZE				(1)	//anchor will range with 1st Tag it gets blink from
 
 #define SEND_TOF_REPORT				(1)	//use this to set sendTOFR2Tag parameter if the anchor sends the report back to the tag
 #define NO_TOF_REPORT				(0)
@@ -591,7 +591,7 @@ void instance_readaccumulatordata(void);
 //	Functions used in driving/controlling the ranging application
 //
 //-------------------------------------------------------------------------------------------------------------
-
+void instancesetaddresses(instanceAddressConfig_t *plconfig);
 // opent the SPI Cheetah interface - called from inittestapplication()
 int instancespiopen(void) ;  // Open SPI and return handle
 // close the SPI Cheetah interface  
