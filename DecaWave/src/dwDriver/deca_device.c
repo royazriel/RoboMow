@@ -2077,10 +2077,18 @@ void dwt_setcallbacks(void (*txcallback)(const dwt_callback_data_t *), void (*rx
 
 uint8 dwt_checkIRQ(void) {
 	uint8 temp;
-
+	usleep(10);
 	dwt_readfromdevice(SYS_STATUS_ID, 0, 1, &temp);
 	return (temp & 0x1);
 }
+
+uint8 dwt_checkState(void) {
+	uint8 temp;
+
+	dwt_readfromdevice(SYS_STATE_ID, 0, 1, &temp);
+	return (temp & 0x1);
+}
+
 
 /*! ------------------------------------------------------------------------------------------------------------------
  * @fn dwt_isr()

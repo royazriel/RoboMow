@@ -45,7 +45,7 @@ int UdpClinetSendReportTOF( unsigned char* buffer, int size)
 {
 	if( sendto( s_fd, buffer, size , 0 , (struct sockaddr *) &s_socket, sizeof(s_socket ) )==-1)
 	{
-		PINFO("UdpClinetSendReportTOF()");
+		PINFO("UdpClinetSendReportTOF() Error");
 		return -1;
 	}
 	return 0;

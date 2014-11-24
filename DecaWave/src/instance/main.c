@@ -32,6 +32,9 @@ int instance_anchaddr = 0;
 int instance_tagaddr = 0;
 int dr_mode = 0;
 int responseDelay = 150;
+int noPrint = 0;
+uint32 resetTimeout = 0;
+uint64 lastCommunication = 0;
 
 uint32 txPower = 0x1f1f1f1f;
 uint64 burnAddress = 0;
@@ -204,70 +207,17 @@ void addressconfigure(void)
 
 uint32 inittestapplication(void);
 
-
-#if 0
-
-typedef struct
-{
-    uint64 address ;                                    // contains this own address
-    char userString[MAX_USER_PAYLOAD_STRING+2] ;        // user supplied payload string
-    int counterAppend ;
-	int anchorListSize ;
-	int anchorPollMask ;
-	int tagSleepDuration ;
-	int tagBlinkSleepDuration ;
-    int anchorSendReports ;
-	int responseDelay ;
-} plConfig_t ;
-
-plConfig_t payloadConfig = { 0xDECA000011223300,         // packetAddress 64 bit extended address
-                            "",							 // payload string - probably will initialise to empty string
-                            0,							 // flag - include ASCII a counter in the payload
-							ANCHOR_LIST_SIZE,			 // anchor list size
-							1,							 // anchor poll mask (bit mask: 1 = poll Anchor ID 1, 3 = poll both Anchors ID 1 and ID 2)
-							400,						 // tag sleep time
-							1000,						 // tag blink sleep time
-                            SEND_TOF_REPORT,			 // anchor sends reports by default (to tag that it ranged to)
-							FIXED_REPLY_DELAY	} ;		 // default response delay time
-
-
-plConfig_t tempPayloadConfig ;              // a copy for temp update in dialog
-#endif
-
-
 // Restart and re-configure
 void restartinstance(void)
 {
 
     instance_close() ;                          //shut down instance, PHY, SPI close, etc.
+    closespi();
     openspi( &s_spi );
 
     inittestapplication() ;                     //re-initialise instance/device
 } // end restartinstance()
 
-
-int decarangingmode(void)
-{
-	int mode = 0;  //ch2 110kb/s
-
-#ifdef ST_MC
-	if(is_switch_on(TA_SW1_5))
-	{
-		mode = 1;
-	}
-
-	if(is_switch_on(TA_SW1_6))
-	{
-		mode = mode + 2;
-	}
-
-	if(is_switch_on(TA_SW1_7))
-	{
-		mode = mode + 4;
-	}
-#endif
-	return mode;
-}
 
 uint32 inittestapplication()
 {
@@ -308,7 +258,7 @@ uint32 inittestapplication()
 
 	if(instance_mode == LISTENER) instcleartaglist();
 
-
+#if (DR_DISCOVERY == 0)
 	if(instance_mode == TAG)
 	{
 		if( UdpclinetConnect((const char *)ipAddress, port))
@@ -316,28 +266,28 @@ uint32 inittestapplication()
 			PINFO("udp client failed to init socket");
 		}
 	}
-	else
+#else
+	if(instance_mode == ANCHOR)
 	{
-
+		PINFO("connecting");
+		if( UdpclinetConnect((const char *)ipAddress, port))
+		{
+			PINFO("udp client failed to init socket");
+		}
 	}
+#endif
 
-	if(instance_mode != TAG)
-	{
-
-	}
-	else
-	{
-	}
-
-	if( 0 /*is_fastrng_on(0) == S1_SWITCH_ON*/) //if fast ranging then initialise instance for fast ranging application
+	if( 0 /*responseDelay < FIXED_REPLY_DELAY*/ ) //if fast ranging then initialise instance for fast ranging application
 	{
 		instance_init_f(instance_mode); //initialise Fast 2WR specific data
 		//when using fast ranging the channel config is either mode 2 or mode 6
 		//default is mode 2
 		//dr_mode = decarangingmode();
-
-		if((dr_mode & 0x1) == 0)
-			dr_mode = 1;
+		if( dr_mode != 1 && dr_mode != 5 )
+		{
+			PINFO("channel mode has to be 1 or 5");
+			exit(1);
+		}
 	}
 	else
 	{
@@ -350,6 +300,7 @@ uint32 inittestapplication()
     instConfig.pulseRepFreq = chConfig[dr_mode].prf ;
     instConfig.pacSize = chConfig[dr_mode].pacSize ;
     instConfig.nsSFD = chConfig[dr_mode].nsSFD ;
+    instConfig.sfdTO = chConfig[dr_mode].sfdTO ;
     instConfig.dataRate = chConfig[dr_mode].datarate ;
     instConfig.preambleLen = chConfig[dr_mode].preambleLength ;
 
@@ -362,10 +313,9 @@ uint32 inittestapplication()
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
 #endif
-    instancesettagsleepdelay( POLL_SLEEP_DELAY, BLINK_SLEEP_DELAY); //set the Tag sleep time
+    instancesettagsleepdelay( 0, BLINK_SLEEP_DELAY); //set the Tag sleep time
 
-    //if TA_SW1_2 is on use fast ranging (fast 2wr)
-      if( 0 /*is_fastrng_on(0) == S1_SWITCH_ON*/)
+      if( 0 /*responseDelay < FIXED_REPLY_DELAY*/ )
       {
       	//Fast 2WR specific config
       	//configure the delays/timeouts
@@ -377,49 +327,19 @@ uint32 inittestapplication()
       	// The anchor ranging init response delay has to match the delay the tag expects
       	// the tag will then use the ranging response delay as specified in the ranging init message
       	// use this to set the long blink response delay (e.g. when ranging with a PC anchor that wants to use the long response times != 150ms)
-		if( 0 /*is_switch_on(TA_SW1_8) == S1_SWITCH_ON*/)
+		if( 0 /*responseDelay < FIXED_REPLY_DELAY*/ )
 		{
 			instancesetblinkreplydelay(FIXED_LONG_BLINK_RESPONSE_DELAY);
 		}
 		else //this is for ARM to ARM tag/anchor (using normal response times 150ms)
 		{
-			instancesetblinkreplydelay(responseDelay/*FIXED_REPLY_DELAY*/);
+			instancesetblinkreplydelay(responseDelay);
 		}
 
 		//set the default response delays
-		instancesetreplydelay(responseDelay/*FIXED_REPLY_DELAY*/, 0);
+		instancesetreplydelay(responseDelay, 0);
       }
 
-#if HOST_DEMO
-    if (initComplete == 0)
-  	{
-		antennaDelay16 = instancegetantennadelay(DWT_PRF_16M);          // MP Antenna Delay at 16MHz PRF (read from OTP calibration data)
-		antennaDelay64 = instancegetantennadelay(DWT_PRF_64M);          // MP Antenna Delay at 64MHz PRF (read from OTP calibration data)
-		if (antennaDelay16 == 0) antennaDelay16 = DWT_PRF_16M_RFDLY;    // Set a value locally if not programmed in OTP cal data
-		if (antennaDelay64 == 0) antennaDelay64 = DWT_PRF_64M_RFDLY;    // Set a value locally if not programmed in OTP cal data
-  	}
-
-	if (instConfig.pulseRepFreq == DWT_PRF_64M)
-	{
-	  antennaDelay = antennaDelay64 ;
-	}
-	else
-	{
-	  antennaDelay = antennaDelay16 ;
-	}
-
-	//PINFO("antena delay=%0.3f",antennaDelay);
-	instancesetantennadelays(antennaDelay) ;
-
-	payloadconfigure() ;                            // set up initial payload configuration
-
-	instancesettagsleepdelay(payloadConfig.tagSleepDuration, payloadConfig.tagBlinkSleepDuration) ;
-
-	instancesetblinkreplydelay(payloadConfig.responseDelay);
-	instancesetreplydelay(payloadConfig.responseDelay, 0) ;
-
-	instancesetreporting(payloadConfig.anchorSendReports) ;     // Set whether anchor instance sends reports
-#endif
 	initComplete = 1;
 
 	return devID;
@@ -469,10 +389,11 @@ static void print_usage(const char *prog)
              "  -c --channel    		channel selection 0-7 like on evkDW1000\n"
 			 "  -i --ipAddress  		udp server address\n"
 			 "  -p --port           	server listening port\n"
-			 "  -t --tagID          	tag serial number\n"
 			 "  -s --response_delay  	in milisec\n"
         	 "  -b --burnOTPAddress  	8byte hex\n"
         	 "  -x --txPower         	tx power\n"
+        	 "  -n --noPrint            no print of results to console"
+        	 "	-t --resetTimeout		in case no communication restart state machine in ms"
 
         );
         exit(1);
@@ -490,12 +411,14 @@ static void parse_opts(int argc, char *argv[])
                         { "anchorID"            , 1, 0, 'a' },
                         { "response_delay"      , 1, 0, 's' },
 						{ "burnOTPAddress"      , 1, 0, 'b' },
-						{ "txPower		 "      , 1, 0, 'x' },
+						{ "txPower"		        , 1, 0, 'x' },
+						{ "noPrint"      		, 1, 0, 'n' },
+						{ "resetTimout"    		, 1, 0, 't' },
                         { NULL          		, 0, 0, 0   },
                 };
                 int c;
 
-                c = getopt_long(argc, argv, "d:r:c:i:p:a:s:b:x:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:a:s:b:x:n:t:", lopts, NULL);
 
                 if (c == -1)
                        break;
@@ -531,7 +454,12 @@ static void parse_opts(int argc, char *argv[])
 					case 'x':
 							txPower = (uint32)strtol(optarg, NULL, 0);
 							break;
-
+					case 'n':
+							noPrint = (int)strtol(optarg, NULL, 0);
+							break;
+					case 't':
+							resetTimeout = (int)strtol(optarg, NULL, 0);
+							break;
 					default:
 							print_usage(argv[0]);
 							break;
@@ -556,6 +484,9 @@ int main(int argc, char *argv[])
 	double range_result = 0;
 	double avg_result = 0;
 	unsigned char buffer[100];
+	int gpioVal = 1;
+
+	lastCommunication = getmstime();
 
 	GPIOExport(DW_RESET_PIN);
 	GPIODirection(DW_RESET_PIN,OUT);
@@ -578,7 +509,7 @@ int main(int argc, char *argv[])
 	GPIOWrite( DW_WAKEUP_PIN, LOW );
 
 	s_spi.bits = 8;
-	s_spi.speed = 1000000; //4500000;
+	s_spi.speed = 1500000;
 	s_spi.delay = 0;
 	s_spi.mode = 0;
 	s_spi.toggle_cs = 0;
@@ -619,6 +550,15 @@ int main(int argc, char *argv[])
 		if (initComplete)   // if application is not paused (and initialsiation completed)
 		{
 			instance_run();
+			if( resetTimeout > 0 )
+			{
+				if( getmstime() >  lastCommunication + resetTimeout )
+				{
+					PINFO("no Communication resetting");
+					restartinstance();
+					lastCommunication = getmstime();
+				}
+			}
 
 			if(instancenewrange())
 	        {
@@ -631,17 +571,30 @@ int main(int argc, char *argv[])
 	            avg_result = instance_get_adist();
 	            //set_rangeresult(range_result);
 	            //PCLS;
-	            PINFO("**************************************************LAST: %4.2f m t:%u **************************************************", range_result,getmstime()-lastReportTime);
+
+	            if( !noPrint )
+	            {
+	            	PINFO("**************************************************LAST: %4.2f m t:%u **************************************************", range_result,getmstime()-lastReportTime);
+	            }
+	            gpioVal ^= 1;
+	            GPIOWrite( DW_WAKEUP_PIN, gpioVal );
 	            lastReportTime=getmstime();
 	            uint64 id = instance_get_anchaddr();
 	            (*(uint32*)buffer)= (uint32)id;
 	            swap4Bytes(buffer);
 	            (*(float*)(buffer+4)) = (float)range_result;
 	            swap4Bytes(buffer+4);
+#if (DR_DISCOVERY == 0)
 	            if( instance_mode == TAG )
 	            {
 	            	UdpClinetSendReportTOF(buffer, 8);
 	            }
+#else
+	            if( instance_mode == ANCHOR )
+				{
+					UdpClinetSendReportTOF(buffer, 8);
+				}
+#endif
 
 #if (DR_DISCOVERY == 0)
 	            if(instance_mode == ANCHOR)

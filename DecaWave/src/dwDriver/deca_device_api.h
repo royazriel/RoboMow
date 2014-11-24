@@ -464,8 +464,8 @@ void dwt_setsmarttxpower(int enable);
  *                         standard PHR mode allows up to 127 bytes
  *								if > 127 is programmed, DWT_PHRMODE_EXT needs to be set in the phrMode configuration
  *								see dwt_configure function
- * @param txFrameBytes   - Pointer to the user’s buffer containing the data to send.
- * @param txBufferOffset - This specifies an offset in the DW1000’s TX Buffer at which to start writing data.
+ * @param txFrameBytes   - Pointer to the userï¿½s buffer containing the data to send.
+ * @param txBufferOffset - This specifies an offset in the DW1000ï¿½s TX Buffer at which to start writing data.
  *
  * output parameters
  *
@@ -929,7 +929,7 @@ void dwt_setcallbacks(void (*txcallback)(const dwt_callback_data_t *), void (*rx
  * return value is 1 if the IRQS bit is set and 0 otherwise
  */
 uint8 dwt_checkIRQ(void);
-
+uint8 dwt_checkState(void);
 /*! ------------------------------------------------------------------------------------------------------------------
  * Function: dwt_isr()
  *

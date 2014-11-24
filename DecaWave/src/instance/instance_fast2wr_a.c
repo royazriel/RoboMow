@@ -27,7 +27,6 @@
 //
 int testapprun_af(instance_data_t *inst, int message)
 {
-
     switch (inst->testAppState)
     {
         case TA_INIT :
@@ -109,7 +108,7 @@ int testapprun_af(instance_data_t *inst, int message)
 
                 dwt_setdelayedtrxtime(inst->delayedReplyTime32) ;
 
-                if(dwt_starttx(DWT_START_TX_DELAYED | inst->wait4ack))  // delayed start was too late
+                if( dwt_starttx(DWT_START_TX_DELAYED | inst->wait4ack))  // delayed start was too late
                 {
                     //error - TX FAILED
                     inst->testAppState = TA_RX_WAIT_DATA ;              // wait for next frame
@@ -125,6 +124,7 @@ int testapprun_af(instance_data_t *inst, int message)
 
 					inst->testAppState = TA_TX_WAIT_CONF ;                                               // wait confirmation
                     inst->done = INST_DONE_WAIT_FOR_NEXT_EVENT;  //no timeout
+
                 }
 
 
@@ -318,7 +318,6 @@ int testapprun_af(instance_data_t *inst, int message)
                 case SIG_RX_BLINK :
                 {
                 	event_data_t* dw_event = instance_getevent(1); //get and clear this event
-
 					//add this Tag to the list of Tags we know about
 					instaddtagtolist(inst, &(dw_event->msgu.rxblinkmsg.tagID[0]));
 
@@ -336,7 +335,6 @@ int testapprun_af(instance_data_t *inst, int message)
 							memcpy(&(inst->rnmsg.destAddr[0]), &(dw_event->msgu.rxblinkmsg.tagID[0]), BLINK_FRAME_SOURCE_ADDRESS); //remember who to send the reply to;
 
 							inst->testAppState = TA_TXRANGINGINIT_WAIT_SEND ;
-
 							break;
 						}
 
@@ -433,7 +431,6 @@ int testapprun_af(instance_data_t *inst, int message)
 
                         switch(fcode)
                         {
-
                             case RTLS_DEMO_MSG_TAG_POLLF:
                             {
                             	//uint8 temp[5];

@@ -20,6 +20,8 @@
 extern uint32 getmstime();
 extern uint32 startTime;
 extern uint32 txPower;
+extern uint64 lastCommunication;
+
 // -------------------------------------------------------------------------------------------------------------------
 //      Data Definitions
 // -------------------------------------------------------------------------------------------------------------------
@@ -890,7 +892,20 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 		{
 			//if(rxd->dblbuff == 0)  instance_readaccumulatordata();     // for diagnostic display in DecaRanging PC window
 			//instance_calculatepower();
-
+			if(instance_data[0].mode == ANCHOR )
+			{
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_POLL)
+				{
+					lastCommunication = getmstime();
+				}
+			}
+			if(instance_data[0].mode == TAG )
+			{
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_ANCH_RESP)
+				{
+					lastCommunication = getmstime();
+				}
+			}
 	    	instance_data[instance].stoptimer = 1;
 
             if(instance_data[instance].ackreq == 0) //only notify there is event if no ACK pending
@@ -1176,31 +1191,6 @@ int instance_run(void)
     int instance = 0 ;
     int done = INST_NOT_DONE_YET;
 	dwt_deviceentcnts_t itemp = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-	#ifdef HOST_APP
-	if(!instance_data[instance].deviceissleeping) //if sleeping - don't access SPI
-	{
-		instancereadevents(&itemp);
-	}
-
-#if (DEEP_SLEEP == 1)	
-	if(instance_data[instance].tagDeepSleep)
-	{
-		if((instance_data[instance].mode == TAG) || (instance_data[instance].mode == TAG_TDOA))
-		{
-			itemp.CRCG = instance_data[instance].rxmsgcount ;
-			itemp.TXF = instance_data[instance].txmsgcount ;
-		}
-	}
-	else
-	{
-		instance_data[instance].rxmsgcount = itemp.CRCG;
-		instance_data[instance].txmsgcount = itemp.TXF;
-	}
-#else
-	instance_data[instance].rxmsgcount = itemp.CRCG;
-#endif
-#endif
 
 	if(getSpiHandle() > 0) //this is as Cheetah does not work with interrupts
 	{
