@@ -897,6 +897,11 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_POLL)
 				{
 					lastCommunication = getmstime();
+					//PINFO("GOT RTLS_DEMO_MSG_TAG_POLL from %llx",*(uint64*)&dw_event.msgu.frame[13],getmstime()-startTime);
+				}
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_FINAL)
+				{
+					//PINFO("GOT RTLS_DEMO_MSG_TAG_FINAL from %llx %u",*(uint64*)&dw_event.msgu.frame[13],getmstime()-startTime);
 				}
 			}
 			if(instance_data[0].mode == TAG )
@@ -904,6 +909,12 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_ANCH_RESP)
 				{
 					lastCommunication = getmstime();
+					//PINFO("GOT RTLS_DEMO_MSG_ANCH_RESP from %llx %u",*(uint64*)&dw_event.msgu.frame[13],getmstime()-startTime);
+				}
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_ANCH_TOFR)
+				{
+					lastCommunication = getmstime();
+					//PINFO("GOT RTLS_DEMO_MSG_ANCH_TOFR from %llx %u",*(uint64*)&dw_event.msgu.frame[13],getmstime()-startTime);
 				}
 			}
 	    	instance_data[instance].stoptimer = 1;
@@ -1253,7 +1264,6 @@ int instance_run(void)
 			instance_putevent(dw_event);
         }
     }
-
     return 0 ;
 }
 

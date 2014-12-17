@@ -312,8 +312,11 @@ uint32 inittestapplication()
 
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
-#endif
+    instancesettagsleepdelay( 50, BLINK_SLEEP_DELAY); //set the Tag sleep time
+#else
     instancesettagsleepdelay( 0, BLINK_SLEEP_DELAY); //set the Tag sleep time
+#endif
+
 
       if( 0 /*responseDelay < FIXED_REPLY_DELAY*/ )
       {

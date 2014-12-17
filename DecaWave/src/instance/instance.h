@@ -47,7 +47,7 @@ extern "C" {
 #define DOUBLE_RX_BUFFER (0) //To enable double RX buffer set this to 1 - this only works for the Listener instance
 //NOTE: this feature is really meant for a RX only instance, as TX will not be possible while double-buffer and auto rx-enable is on.
 
-#define DR_DISCOVERY	(1) //to use discovery ranging mode (tag will blink until it receives ranging request from an anchor)
+#define DR_DISCOVERY	(0) //to use discovery ranging mode (tag will blink until it receives ranging request from an anchor)
 							//after which it will pair with that anchor and start ranging exchange
 
 #define CORRECT_RANGE_BIAS  (1)     // Compensate for small bias due to uneven accumulator growth at close up high power

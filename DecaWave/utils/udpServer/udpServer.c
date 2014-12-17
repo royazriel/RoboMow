@@ -33,8 +33,8 @@ int main(void)
      
     int s, i, slen = sizeof(si_other) , recv_len;
     char buf[BUFLEN];
-    int id;
-    float range;
+    int id[2];
+    float range[2];
      
     //create a UDP socket
     if ((s=socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP)) == -1)
@@ -69,9 +69,18 @@ int main(void)
         swap4Bytes( buf + 4 );
         if( recv_len == 8 )
         {
-            id = *(unsigned int*)buf;
-            range = *(float*)(buf+4);
-            printf( "\033cmessage received id=%d range=%4.2f\n",id,range);
+	    if( *(unsigned int*)buf == 1)
+	    {
+            	id[0] = *(unsigned int*)buf;
+            	range[0] = *(float*)(buf+4);
+	    }
+	    else
+	    {
+ 		id[1] = *(unsigned int*)buf;
+                range[1] = *(float*)(buf+4);
+	    }
+
+            printf( "\033cid=%d range=%4.2f | id=%d range=%4.2f\n",id[0],range[0],id[1],range[1]);
         }
     }
  
