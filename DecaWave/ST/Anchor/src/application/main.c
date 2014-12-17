@@ -1,0 +1,640 @@
+// -------------------------------------------------------------------------------------------------------------------
+//
+//  File: main.c -
+//
+//  Copyright 2011 (c) DecaWave Ltd, Dublin, Ireland.
+//
+//  All rights reserved.
+//
+//  Author: Zoran Skrba, March 2012
+//
+// -------------------------------------------------------------------------------------------------------------------
+
+/* Includes */
+#include "compiler.h"
+#include "port.h"
+
+#include "instance.h"
+
+#include "deca_types.h"
+
+#include "deca_spi.h"
+
+extern void usb_run(void);
+extern int usb_init(void);
+extern void usb_printconfig(void);
+extern void send_usbmessage(uint8*, int);
+
+#define SOFTWARE_VER_STRING    "Version 2.26    " //
+
+
+int instance_anchaddr = 0; //0 = 0xDECA020000000001; 1 = 0xDECA020000000002; 2 = 0xDECA020000000003
+int dr_mode = 0;
+//if instance_mode = TAG_TDOA then the device cannot be selected as anchor
+int instance_mode = ANCHOR;
+//int instance_mode = TAG;
+//int instance_mode = TAG_TDOA;
+//int instance_mode = LISTENER;
+int paused = 0;
+uint32 startTime;
+
+double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
+
+
+char reset_request;
+
+typedef struct
+{
+    uint8 channel ;
+    uint8 prf ;
+    uint8 datarate ;
+    uint8 preambleCode ;
+    uint8 preambleLength ;
+    uint8 pacSize ;
+    uint8 nsSFD ;
+    uint16 sfdTO ;
+} chConfig_t ;
+
+
+//Configuration for DecaRanging Modes (8 default use cases selectable by the switch S1 on EVK)
+chConfig_t chConfig[8] ={
+                    //mode 1 - S1: 7 off, 6 off, 5 off
+                    {
+                        2,              // channel
+                        DWT_PRF_16M,    // prf
+                        DWT_BR_110K,    // datarate
+                        3,             // preambleCode
+                        DWT_PLEN_1024,  // preambleLength
+                        DWT_PAC32,      // pacSize
+                        1,       // non-standard SFD
+                        (1025 + 64 - 32) //SFD timeout
+                    },
+                    //mode 2
+                    {
+                        2,              // channel
+                        DWT_PRF_16M,    // prf
+                        DWT_BR_6M8,    // datarate
+                        3,             // preambleCode
+                        DWT_PLEN_128,   // preambleLength
+                        DWT_PAC8,       // pacSize
+                        0,       // non-standard SFD
+                        (129 + 8 - 8) //SFD timeout
+                    },
+                    //mode 3
+                    {
+                        2,              // channel
+                        DWT_PRF_64M,    // prf
+                        DWT_BR_110K,    // datarate
+                        9,             // preambleCode
+                        DWT_PLEN_1024,  // preambleLength
+                        DWT_PAC32,      // pacSize
+                        1,       // non-standard SFD
+                        (1025 + 64 - 32) //SFD timeout
+                    },
+                    //mode 4
+                    {
+                        2,              // channel
+                        DWT_PRF_64M,    // prf
+                        DWT_BR_6M8,    // datarate
+                        9,             // preambleCode
+                        DWT_PLEN_128,   // preambleLength
+                        DWT_PAC8,       // pacSize
+                        0,       // non-standard SFD
+                        (129 + 8 - 8) //SFD timeout
+                    },
+                    //mode 5
+                    {
+                        5,              // channel
+                        DWT_PRF_16M,    // prf
+                        DWT_BR_110K,    // datarate
+                        3,             // preambleCode
+                        DWT_PLEN_1024,  // preambleLength
+                        DWT_PAC32,      // pacSize
+                        1,       // non-standard SFD
+                        (1025 + 64 - 32) //SFD timeout
+                    },
+                    //mode 6
+                    {
+                        5,              // channel
+                        DWT_PRF_16M,    // prf
+                        DWT_BR_6M8,    // datarate
+                        3,             // preambleCode
+                        DWT_PLEN_128,   // preambleLength
+                        DWT_PAC8,       // pacSize
+                        0,       // non-standard SFD
+                        (129 + 8 - 8) //SFD timeout
+                    },
+                    //mode 7
+                    {
+                        5,              // channel
+                        DWT_PRF_64M,    // prf
+                        DWT_BR_110K,    // datarate
+                        9,             // preambleCode
+                        DWT_PLEN_1024,  // preambleLength
+                        DWT_PAC32,      // pacSize
+                        1,       // non-standard SFD
+                        (1025 + 64 - 32) //SFD timeout
+                    },
+                    //mode 8
+                    {
+                        5,              // channel
+                        DWT_PRF_64M,    // prf
+                        DWT_BR_6M8,    // datarate
+                        9,             // preambleCode
+                        DWT_PLEN_128,   // preambleLength
+                        DWT_PAC8,       // pacSize
+                        0,       // non-standard SFD
+                        (129 + 8 - 8) //SFD timeout
+                    }
+};
+
+
+#if (DR_DISCOVERY == 0)
+//Tag address list
+uint64 tagAddressList[3] =
+{
+     0xDECA010000001001,         // First tag
+     0xDECA010000000002,         // Second tag
+     0xDECA010000000003          // Third tag
+} ;
+
+//Anchor address list
+uint64 anchorAddressList[ANCHOR_LIST_SIZE] =
+{
+     0xDECA020000000001 ,       // First anchor
+     0xDECA020000000002 ,       // Second anchor
+     0xDECA020000000003 ,       // Third anchor
+     0xDECA020000000004         // Fourth anchor
+} ;
+
+//ToF Report Forwarding Address
+uint64 forwardingAddress[1] =
+{
+     0xDECA030000000001
+} ;
+
+
+// ======================================================
+//
+//  Configure instance tag/anchor/etc... addresses
+//
+void addressconfigure(void)
+{
+    instanceAddressConfig_t ipc ;
+
+    ipc.forwardToFRAddress = forwardingAddress[0];
+    ipc.anchorAddress = anchorAddressList[instance_anchaddr];
+    ipc.anchorAddressList = anchorAddressList;
+    ipc.anchorListSize = ANCHOR_LIST_SIZE ;
+    ipc.anchorPollMask = 0x3; //0x7;              // anchor poll mask
+
+    ipc.sendReport = 1 ;  //1 => anchor sends TOF report to tag
+    //ipc.sendReport = 2 ;  //2 => anchor sends TOF report to listener
+
+    instancesetaddresses(&ipc);
+}
+#endif
+
+uint32 inittestapplication(void);
+
+// Restart and re-configure
+void restartinstance(void)
+{
+    instance_close() ;                          //shut down instance, PHY, SPI close, etc.
+
+    spi_peripheral_init();                      //re initialise SPI...
+
+    inittestapplication() ;                     //re-initialise instance/device
+} // end restartinstance()
+
+
+
+int decarangingmode(void)
+{
+    int mode = 0;
+#ifdef DW1000_EVK
+    if(is_switch_on(TA_SW1_5))
+    {
+        mode = 1;
+    }
+
+    if(is_switch_on(TA_SW1_6))
+    {
+        mode = mode + 2;
+    }
+
+    if(is_switch_on(TA_SW1_7))
+    {
+        mode = mode + 4;
+    }
+#endif
+    return mode;
+}
+
+uint32 inittestapplication(void)
+{
+    unsigned int devID ;
+    instanceConfig_t instConfig;
+    char buf[100];
+    int i , result;
+
+    //SPI_ConfigFastRate(SPI_BaudRatePrescaler_2);  //max SPI before PLLs configured is ~4M
+
+    i = 10;
+
+    //this is called here to wake up the device (i.e. if it was in sleep mode before the restart)
+    devID = instancereaddeviceid() ;
+    sprintf(buf,"dev id %x", devID);
+    printUSART(buf); //send some data
+    if(DWT_DEVICE_ID != devID) //if the read of devide ID fails, the DW1000 could be asleep
+    {
+        port_SPIx_clear_chip_select();  //CS low
+        Sleep(1);   //200 us to wake up then waits 5ms for DW1000 XTAL to stabilise
+        port_SPIx_set_chip_select();  //CS high
+        Sleep(7);
+        devID = instancereaddeviceid() ;
+        // SPI not working or Unsupported Device ID
+        if(DWT_DEVICE_ID != devID)
+            return(-1) ;
+        //clear the sleep bit - so that after the hard reset below the DW does not go into sleep
+        dwt_softreset();
+    }
+
+    //reset the DW1000 by driving the RSTn line low
+    reset_DW1000();
+
+    result = instance_init() ;
+    if (0 > result) return(-1) ; // Some failure has occurred
+
+    SPI_ConfigFastRate(SPI_BaudRatePrescaler_2); //increase SPI to max
+    devID = instancereaddeviceid();
+    sprintf(buf,"dev id %x", devID);
+    printUSART(buf); //send some data
+    if (DWT_DEVICE_ID != devID)   // Means it is NOT MP device
+    {
+        // SPI not working or Unsupported Device ID
+        return(-1) ;
+    }
+
+
+	instance_mode = ANCHOR;
+#if (DR_DISCOVERY == 1)
+	led_on(LED_PC6);
+#else
+	if(instance_anchaddr & 0x1)
+		led_on(LED_PC6);
+
+	if(instance_anchaddr & 0x2)
+		led_on(LED_PC8);
+#endif
+
+    instancesetrole(instance_mode) ;     // Set this instance role
+	instance_init_s(instance_mode);
+	dr_mode = decarangingmode();
+
+    instConfig.channelNumber = chConfig[dr_mode].channel ;
+    instConfig.preambleCode = chConfig[dr_mode].preambleCode ;
+    instConfig.pulseRepFreq = chConfig[dr_mode].prf ;
+    instConfig.pacSize = chConfig[dr_mode].pacSize ;
+    instConfig.nsSFD = chConfig[dr_mode].nsSFD ;
+    instConfig.sfdTO = chConfig[dr_mode].sfdTO ;
+    instConfig.dataRate = chConfig[dr_mode].datarate ;
+    instConfig.preambleLen = chConfig[dr_mode].preambleLength ;
+
+    sprintf(buf,"ch selection: %d ch=%d preamble=%d prf=%d pacSize=%d nsSFD=%d datarate=%d preambleLength=%d",
+        		dr_mode, instConfig.channelNumber, instConfig.preambleCode, instConfig.pulseRepFreq,
+    			instConfig.pacSize, instConfig.nsSFD, instConfig.dataRate, instConfig.preambleLen);
+    printUSART(buf);
+    instance_config(&instConfig) ;                  // Set operating channel etc
+
+#if (DR_DISCOVERY == 0)
+    addressconfigure() ;                            // set up initial payload configuration
+    instancesettagsleepdelay( 50, BLINK_SLEEP_DELAY); //set the Tag sleep time
+#endif
+
+    instancesettagsleepdelay(POLL_SLEEP_DELAY, BLINK_SLEEP_DELAY); //set the Tag sleep time
+
+	// NOTE: this is the delay between receiving the blink and sending the ranging init message
+	// The anchor ranging init response delay has to match the delay the tag expects
+	// the tag will then use the ranging response delay as specified in the ranging init message
+	// use this to set the long blink response delay (e.g. when ranging with a PC anchor that wants to use the long response times != 150ms)
+	instancesetblinkreplydelay(FIXED_REPLY_DELAY);
+
+   	//set the default response delays
+   	instancesetreplydelay(FIXED_REPLY_DELAY, 0);
+
+    return devID;
+}
+/**
+**===========================================================================
+**
+**  Abstract: main program
+**
+**===========================================================================
+*/
+
+void process_deca_irq(void)
+{
+    do{
+
+        instance_process_irq(0);
+
+    }while(port_CheckEXT_IRQ() == 1); //while IRS line active (ARM can only do edge sensitive interrupts)
+
+}
+
+void initLCD(void)
+{
+    uint8 initseq[9] = { 0x39, 0x14, 0x55, 0x6D, 0x78, 0x38 /*0x3C*/, 0x0C, 0x01, 0x06 };
+    uint8 command = 0x0;
+    int j = 100000;
+
+    writetoLCD( 9, 0,  initseq); //init seq
+    while(j--);
+
+    command = 0x2 ;  //return cursor home
+    writetoLCD( 1, 0,  &command);
+    command = 0x1 ;  //clear screen
+    writetoLCD( 1, 0,  &command);
+}
+
+/*
+ * @brief switch_mask  - bitmask of testing switches (currently 7 switches)
+ * 		  switchbuff[] - switch name to test
+ * 		  *switch_fn[]() - corresponded to switch test function
+**/
+#define switch_mask   (0x7F)
+
+#ifdef DW1000_EVK
+const uint8	switchbuf[]={0, TA_SW1_3 , TA_SW1_4 , TA_SW1_5 , TA_SW1_6 , TA_SW1_7 , TA_SW1_8 };
+const int (* switch_fn[])(uint16)={ &is_button_low, \
+								&is_switch_on, &is_switch_on, &is_switch_on,\
+							    &is_switch_on, &is_switch_on, &is_switch_on };
+#endif
+
+/*
+ * @fn test_application_run
+ * @brief	test application for production pre-test procedure
+**/
+void test_application_run(void)
+{
+    char  dataseq[2][40];
+    uint8 j, switchStateOn, switchStateOff;
+#ifdef DW1000_EVK
+    switchStateOn=0;
+    switchStateOff=0;
+
+    led_on(LED_ALL);	// show all LED OK
+    Sleep(1000);
+
+    dataseq[0][0] = 0x1 ;  //clear screen
+    writetoLCD( 1, 0, (const uint8 *) &dataseq);
+    dataseq[0][0] = 0x2 ;  //return cursor home
+    writetoLCD( 1, 0, (const uint8 *) &dataseq);
+
+/* testing SPI to DW1000*/
+    writetoLCD( 40, 1, (const uint8 *) "TESTING         ");
+    writetoLCD( 40, 1, (const uint8 *) "SPI, U2, S2, S3 ");
+    Sleep(1000);
+
+    if(inittestapplication() == (uint32)-1)
+    {
+        writetoLCD( 40, 1, (const uint8 *) "SPI, U2, S2, S3 ");
+        writetoLCD( 40, 1, (const uint8 *) "-- TEST FAILS --");
+        while(1); //stop
+    }
+
+    writetoLCD( 40, 1, (const uint8 *) "SPI, U2, S2, S3 ");
+    writetoLCD( 40, 1, (const uint8 *) "    TEST OK     ");
+    Sleep(1000);
+
+/* testing of switch S2 */
+    dataseq[0][0] = 0x1 ;  //clear screen
+    writetoLCD( 1, 0, (const uint8 *) &dataseq);
+
+    while( (switchStateOn & switchStateOff) != switch_mask )
+        {
+        memset(&dataseq, ' ', sizeof(dataseq));
+        strcpy(&dataseq[0][0], (const char *)"SWITCH");
+        strcpy(&dataseq[1][0], (const char *)"toggle");
+//switch 7-1
+		for (j=0;j<sizeof(switchbuf);j++)
+        {
+			if( switch_fn[j](switchbuf[j]) ) //execute current switch switch_fn
+			{
+				dataseq[0][8+j]='O';
+				switchStateOn |= 0x01<<j;
+				switchStateOff &= ~(0x01<<j);//all switches finaly should be in off state
+			}else{
+				dataseq[1][8+j]='O';
+				switchStateOff |=0x01<<j;
+        }
+        }
+
+        writetoLCD(40, 1, (const uint8 *) &dataseq[0][0]);
+        writetoLCD(40, 1, (const uint8 *) &dataseq[1][0]);
+        Sleep(100);
+        }
+
+    led_off(LED_ALL);
+
+	writetoLCD( 40, 1, (const uint8 *) "  Preliminary   ");
+    writetoLCD( 40, 1, (const uint8 *) "   TEST OKAY    ");
+
+    while(1);
+#endif
+    }
+
+/*
+ * @fn 		main()
+ * @brief	main entry point
+**/
+int main(void)
+{
+	int i = 0;
+	int toggle = 1;
+	int ranging = 0;
+    uint8 dataseq[40];
+	double range_result = 0;
+	double avg_result = 0;
+	uint8 dataseq1[40];
+	uint8 pb;
+
+    peripherals_init();
+
+    spi_peripheral_init();
+
+    printUSART( "DECAWAVE");
+    printUSART( SOFTWARE_VER_STRING );
+    Sleep(1000);
+    /* Enable the peripheral clock of GPIOA */
+     RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
+#if 0
+    //Enable GPIO used for User button
+    GPIO_InitTypeDef GPIO_InitStructure;
+	GPIO_StructInit( &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN ;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+#endif
+
+    port_DisableEXT_IRQ(); //disable ScenSor IRQ until we configure the device
+
+    printUSART("DECAWAVE  RANGE");
+
+    led_off(LED_ALL);
+
+    startTime = portGetTickCount();
+	if(inittestapplication() == (uint32)-1)
+	{
+		led_on(LED_ALL); //to display error....
+		printUSART("  INIT FAIL ");
+		while(1);
+	}
+
+	//sleep for 5 seconds displaying "Decawave"
+	i=30;
+	while(i--)
+	{
+		if (i & 1) led_off(LED_ALL);
+		else    led_on(LED_ALL);
+	
+		Sleep(200);
+	}
+	i = 0;
+	led_off(LED_ALL);
+
+	instance_mode = ANCHOR;
+#if (DR_DISCOVERY == 1)
+            led_on(LED_PC6);
+#else
+	if(instance_anchaddr & 0x1)
+		led_on(LED_PC6);
+
+	if(instance_anchaddr & 0x2)
+		led_on(LED_PC8);
+#endif
+
+	if(instance_mode == TAG)
+	{
+		//if TA_SW1_2 is on use fast ranging (fast 2wr)
+		if( 0 == S1_SWITCH_ON)
+		{
+			printUSART(" Fast Tag  Ranging ");
+		}
+		else
+		{
+			printUSART("TAG BLINK");
+		}
+	}
+	else
+	{
+		printUSART("AWAITING POLL ");
+	}
+
+    port_EnableEXT_IRQ(); //enable ScenSor IRQ before starting
+
+    // main loop
+    while(1)
+    {
+        instance_run();
+
+        if(instancenewrange())
+        {
+        	ranging = 1;
+            //send the new range information to LCD and/or USB
+            range_result = instance_get_idist();
+#if (DR_DISCOVERY == 0)
+            if(instance_mode == ANCHOR)
+#endif
+                avg_result = instance_get_adist();
+            sprintf((char*)&dataseq[1], "LAST: %4.2f m", range_result);
+            printUSART(dataseq); //send some data
+
+#if (DR_DISCOVERY == 0)
+            if(instance_mode == ANCHOR)
+                sprintf((char*)&dataseq1[1], "AVG8: %4.2f m", avg_result);
+            else
+                sprintf((char*)&dataseq1[0], "%llx", instance_get_anchaddr());
+#else
+            sprintf((char*)&dataseq1[1], "AVG8: %4.2f m", avg_result);
+#endif
+            printUSART(dataseq1); //send some data
+        }
+
+        if(ranging == 0)
+        {
+        	if(instance_mode != ANCHOR)
+        	{
+        		if(instancesleeping())
+				{
+					dataseq[0] = 0x2 ;  //return cursor home
+					writetoLCD( 1, 0,  dataseq);
+					if(toggle)
+					{
+						toggle = 0;
+						printUSART("AWAITING RESPONSE");
+					}
+					else
+					{
+						toggle = 1;
+						printUSART("   TAG BLINK    ");
+						sprintf((char*)&dataseq[0], "%llX", instance_get_addr());
+						printUSART(dataseq);
+					}
+
+				}
+
+        		if(instanceanchorwaiting() == 2)
+				{
+        			ranging = 1;
+					memcpy(&dataseq[0], (const uint8 *) "    RANGING WITH", 16);
+					printUSART(dataseq); //send some data
+					sprintf((char*)&dataseq[0], "%016llX", instance_get_anchaddr());
+					printUSART(dataseq);
+				}
+        	}
+        	else
+        	{
+				if(instanceanchorwaiting())
+				{
+					toggle+=2;
+
+					if(toggle > 300000)
+					{
+						if(toggle & 0x1)
+						{
+							toggle = 0;
+							printUSART("AWAITING POLL");
+						}
+						else
+						{
+							toggle = 1;
+	#if (DR_DISCOVERY == 1)
+							memcpy(&dataseq[0], (const uint8 *) " DISCOVERY MODE ", 16);
+	#else
+							memcpy(&dataseq[0], (const uint8 *) " NON DISCOVERY  ", 16);
+#endif
+							//printUSART( dataseq); //send some data
+							//sprintf((char*)&dataseq[0], "%llX", instance_get_addr());
+							//printUSART( dataseq); //send some data
+						}
+					}
+
+				}
+				else if(instanceanchorwaiting() == 2)
+				{
+					memcpy(&dataseq[0], (const uint8 *) "    RANGING WITH", 16);
+					printUSART( dataseq); //send some data
+					sprintf((char*)&dataseq[0], "%llX", instance_get_tagaddr());
+					printUSART( dataseq); //send some data
+				}
+        	}
+        }
+    }
+    return 0;
+}
+
+
+
