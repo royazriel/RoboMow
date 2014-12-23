@@ -9,7 +9,7 @@
 #include "diag/Trace.h"
 #include "hardware_config.h"
 #include "lis3dh_driver.h"
-
+#include "motor_control.h"
 // ----------------------------------------------------------------------------
 //
 // STM32F0 empty sample (trace via ITM).
@@ -49,15 +49,31 @@ main(int argc, char* argv[])
 
 	while (1)
 	{
-		if(PB1_STATE)
+
+		//get Acceleration Raw data
+		response = GetOneAxisTilt( &tilt );
+		if(response==MEMS_SUCCESS)
 		{
-			//get Acceleration Raw data
-			response = GetOneAxisTilt( &tilt );
-			if(response==MEMS_SUCCESS)
+#if 1
+			//print data values
+			UsartPrintf( "tilt %2.2f \r\n",tilt);
+
+			if( tilt > -10 && tilt < 10)
 			{
-				//print data values
-				UsartPrintf( "tilt %2.2f \r\n",tilt);
+				MotorsControlDrive( etSpeedMid, etDirForword  );
 			}
+			if( abs(tilt) > 10 )
+			{
+				if( tilt < 0 )
+				{
+					MotorsControlDrive( etSpeedLow, etDirCCW  );
+				}
+				else
+				{
+					MotorsControlDrive( etSpeedLow, etDirCW  );
+				}
+			}
+#else
 			/*******************************************************/
 			if(PB1_STATE)
 			{
@@ -68,8 +84,11 @@ main(int argc, char* argv[])
 				{
 					LED_PORT->BSRR |= LED1;
 				}
+				MOTOR_PWM_R += 100;
+				UsartPrintf( "CCR = %d \r\n",MOTOR_PWM_R);
+				usleep(500000);
 			}
-			usleep(500000);
+#endif
 			/*******************************************************/
 		}
 

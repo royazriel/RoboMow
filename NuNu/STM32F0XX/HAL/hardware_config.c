@@ -256,9 +256,6 @@ int InitPwm()
 	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
 	GPIO_InitTypeDef GPIO_InitStructure;
 	TIM_OCInitTypeDef TIM_OCInitStructure;
-	uint16_t TimerPeriod = 0;
-	uint16_t Channel1Pulse = 0, Channel2Pulse = 0;
-
 
 	/* GPIOA Configuration: Channel 1, 2, 3 and 4 as alternate function push-pull */
 	GPIO_InitStructure.GPIO_Pin = MOTOR_DRV_R | MOTOR_DRV_L;
@@ -271,19 +268,12 @@ int InitPwm()
 	GPIO_PinAFConfig(MOTOR_GPIO_PORT, MOTOR_DRV_R_AF_SRC, GPIO_AF_1);  	//TIM3 ONLY
 	GPIO_PinAFConfig(MOTOR_GPIO_PORT, MOTOR_DRV_L_AF_SRC, GPIO_AF_1);	//TIM3 ONLY
 
-	/* Compute the value to be set in ARR regiter to generate signal frequency at 17.57 Khz */
-	TimerPeriod = (SystemCoreClock / 17570 ) - 1;
-	/* Compute CCR1 value to generate a duty cycle at 50% for channel 1 */
-	Channel1Pulse = (uint16_t) (((uint32_t) 5 * (TimerPeriod - 1)) / 10);
-	/* Compute CCR2 value to generate a duty cycle at 37.5%  for channel 2 */
-	Channel2Pulse = (uint16_t) (((uint32_t) 375 * (TimerPeriod - 1)) / 1000);
-
 	RCC_APB1PeriphClockCmd(RCC_APB1ENR_TIM3EN, ENABLE);
 //
 	/* Time Base configuration */
 	TIM_TimeBaseStructure.TIM_Prescaler = 0;
 	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
-	TIM_TimeBaseStructure.TIM_Period = TimerPeriod;
+	TIM_TimeBaseStructure.TIM_Period = (SystemCoreClock/PWM_FREQUENCY) - 1;
 	TIM_TimeBaseStructure.TIM_ClockDivision = 0;
 	TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;
 	TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
@@ -296,10 +286,10 @@ int InitPwm()
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
 	TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCIdleState_Reset;
 
-	TIM_OCInitStructure.TIM_Pulse = Channel1Pulse;
+	TIM_OCInitStructure.TIM_Pulse = 500;
 	TIM_OC1Init(TIM3, &TIM_OCInitStructure);
 
-	TIM_OCInitStructure.TIM_Pulse = Channel2Pulse;
+	TIM_OCInitStructure.TIM_Pulse = 500;
 	TIM_OC2Init(TIM3, &TIM_OCInitStructure);
 
 	/* TIM1 counter enable */

@@ -7,6 +7,8 @@
 #include "stm32f0xx_spi.h"
 #include "stm32f0xx_usart.h"
 
+
+#define PWM_FREQUENCY			17570
 #define MOTOR_DRV_R				GPIO_Pin_4
 #define MOTOR_DRV_R_AF_SRC		GPIO_PinSource4
 #define MOTOR_DRV_L				GPIO_Pin_5
@@ -17,6 +19,9 @@
 #define MOTOR_IMPELER			GPIO_Pin_2
 #define MOTOR_DISPENSER			GPIO_Pin_3
 #define MOTOR_GPIO_PORT 		GPIOB				//TIM3 AF1 CH1->PB4  CH2->PB5 CH3->PB0 CH4->PB1
+#define MOTOR_PWM_R				TIM3->CCR1
+#define MOTOR_PWM_L				TIM3->CCR2
+
 
 #define SENSE_PROX1				GPIO_Pin_6
 #define SENSE_PROX2				GPIO_Pin_7
@@ -59,6 +64,7 @@
 #define MOTOR_DIR_R				GPIO_Pin_8
 #define MOTOR_DIR_L				GPIO_Pin_9
 #define LED_PORT				GPIOC
+#define MOTOR_DIR_PORT			GPIOC
 
 #define USER_PB1				GPIO_Pin_0
 #define USER_PB2				GPIO_Pin_1
