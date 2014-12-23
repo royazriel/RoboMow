@@ -27,6 +27,8 @@ extern void send_usbmessage(uint8*, int);
 
 #define SOFTWARE_VER_STRING    "Version 2.26    " //
 
+#define COM_TIMEOUT_TO_RESET 3000
+
 
 int instance_anchaddr = 0; //0 = 0xDECA020000000001; 1 = 0xDECA020000000002; 2 = 0xDECA020000000003
 int dr_mode = 0;
@@ -37,6 +39,7 @@ int instance_mode = ANCHOR;
 //int instance_mode = LISTENER;
 int paused = 0;
 uint32 startTime;
+uint64 lastCommunication = 0;
 
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
 
@@ -238,7 +241,7 @@ uint32 inittestapplication(void)
     char buf[100];
     int i , result;
 
-    //SPI_ConfigFastRate(SPI_BaudRatePrescaler_2);  //max SPI before PLLs configured is ~4M
+    SPI_ConfigFastRate(SPI_BaudRatePrescaler_2);  //max SPI before PLLs configured is ~4M
 
     i = 10;
 
@@ -281,11 +284,16 @@ uint32 inittestapplication(void)
 #if (DR_DISCOVERY == 1)
 	led_on(LED_PC6);
 #else
-	if(instance_anchaddr & 0x1)
+	if(anchorAddressList[instance_anchaddr] & 0x1)
+	{
 		led_on(LED_PC6);
-
-	if(instance_anchaddr & 0x2)
+		led_off(LED_PC8);
+	}
+	if(anchorAddressList[instance_anchaddr] & 0x2)
+	{
+		led_on(LED_PC6);
 		led_on(LED_PC8);
+	}
 #endif
 
     instancesetrole(instance_mode) ;     // Set this instance role
@@ -310,9 +318,9 @@ uint32 inittestapplication(void)
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
     instancesettagsleepdelay( 50, BLINK_SLEEP_DELAY); //set the Tag sleep time
-#endif
-
+#else
     instancesettagsleepdelay(POLL_SLEEP_DELAY, BLINK_SLEEP_DELAY); //set the Tag sleep time
+#endif
 
 	// NOTE: this is the delay between receiving the blink and sending the ranging init message
 	// The anchor ranging init response delay has to match the delay the tag expects
@@ -380,69 +388,7 @@ void test_application_run(void)
 {
     char  dataseq[2][40];
     uint8 j, switchStateOn, switchStateOff;
-#ifdef DW1000_EVK
-    switchStateOn=0;
-    switchStateOff=0;
 
-    led_on(LED_ALL);	// show all LED OK
-    Sleep(1000);
-
-    dataseq[0][0] = 0x1 ;  //clear screen
-    writetoLCD( 1, 0, (const uint8 *) &dataseq);
-    dataseq[0][0] = 0x2 ;  //return cursor home
-    writetoLCD( 1, 0, (const uint8 *) &dataseq);
-
-/* testing SPI to DW1000*/
-    writetoLCD( 40, 1, (const uint8 *) "TESTING         ");
-    writetoLCD( 40, 1, (const uint8 *) "SPI, U2, S2, S3 ");
-    Sleep(1000);
-
-    if(inittestapplication() == (uint32)-1)
-    {
-        writetoLCD( 40, 1, (const uint8 *) "SPI, U2, S2, S3 ");
-        writetoLCD( 40, 1, (const uint8 *) "-- TEST FAILS --");
-        while(1); //stop
-    }
-
-    writetoLCD( 40, 1, (const uint8 *) "SPI, U2, S2, S3 ");
-    writetoLCD( 40, 1, (const uint8 *) "    TEST OK     ");
-    Sleep(1000);
-
-/* testing of switch S2 */
-    dataseq[0][0] = 0x1 ;  //clear screen
-    writetoLCD( 1, 0, (const uint8 *) &dataseq);
-
-    while( (switchStateOn & switchStateOff) != switch_mask )
-        {
-        memset(&dataseq, ' ', sizeof(dataseq));
-        strcpy(&dataseq[0][0], (const char *)"SWITCH");
-        strcpy(&dataseq[1][0], (const char *)"toggle");
-//switch 7-1
-		for (j=0;j<sizeof(switchbuf);j++)
-        {
-			if( switch_fn[j](switchbuf[j]) ) //execute current switch switch_fn
-			{
-				dataseq[0][8+j]='O';
-				switchStateOn |= 0x01<<j;
-				switchStateOff &= ~(0x01<<j);//all switches finaly should be in off state
-			}else{
-				dataseq[1][8+j]='O';
-				switchStateOff |=0x01<<j;
-        }
-        }
-
-        writetoLCD(40, 1, (const uint8 *) &dataseq[0][0]);
-        writetoLCD(40, 1, (const uint8 *) &dataseq[1][0]);
-        Sleep(100);
-        }
-
-    led_off(LED_ALL);
-
-	writetoLCD( 40, 1, (const uint8 *) "  Preliminary   ");
-    writetoLCD( 40, 1, (const uint8 *) "   TEST OKAY    ");
-
-    while(1);
-#endif
     }
 
 /*
@@ -463,6 +409,8 @@ int main(void)
     peripherals_init();
 
     spi_peripheral_init();
+
+	lastCommunication = portGetTickCount();
 
     printUSART( "DECAWAVE");
     printUSART( SOFTWARE_VER_STRING );
@@ -494,7 +442,7 @@ int main(void)
 	}
 
 	//sleep for 5 seconds displaying "Decawave"
-	i=30;
+	i=5;
 	while(i--)
 	{
 		if (i & 1) led_off(LED_ALL);
@@ -509,11 +457,16 @@ int main(void)
 #if (DR_DISCOVERY == 1)
             led_on(LED_PC6);
 #else
-	if(instance_anchaddr & 0x1)
+	if(anchorAddressList[instance_anchaddr] & 0x1)
+	{
 		led_on(LED_PC6);
-
-	if(instance_anchaddr & 0x2)
+		led_off(LED_PC8);
+	}
+	if(anchorAddressList[instance_anchaddr] & 0x2)
+	{
+		led_on(LED_PC6);
 		led_on(LED_PC8);
+	}
 #endif
 
 	if(instance_mode == TAG)
@@ -538,7 +491,23 @@ int main(void)
     // main loop
     while(1)
     {
+    	if( GPIO_ReadInputDataBit( USER_BUTTON_PORT,USER_BUTTON))
+    	{
+    		instance_anchaddr++;
+    		if(instance_anchaddr==ANCHOR_LIST_SIZE) instance_anchaddr = 0;
+    		sprintf( dataseq, "ANCHOR ID CHANGED to %d", instance_anchaddr);
+    		printUSART(dataseq);
+    		restartinstance();
+    		sleep(1);
+    	}
         instance_run();
+
+		if( portGetTickCount() >  lastCommunication + COM_TIMEOUT_TO_RESET )
+		{
+			printUSART("no Communication resetting");
+			restartinstance();
+			lastCommunication = portGetTickCount();
+		}
 
         if(instancenewrange())
         {

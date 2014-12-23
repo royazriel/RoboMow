@@ -28,6 +28,7 @@ double inst_idist = 0;
 double inst_adist = 0;
 double inst_ldist = 0;
 instance_data_t instance_data[NUM_INST] ;
+extern uint64 lastCommunication;
 
 instance_localdata_t instance_localdata[NUM_INST] ;
 
@@ -872,6 +873,28 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 		{
 			//if(rxd->dblbuff == 0)  instance_readaccumulatordata();     // for diagnostic display in DecaRanging PC window
 			//instance_calculatepower();
+			if(instance_data[0].mode == ANCHOR )
+			{
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_POLL)
+				{
+					lastCommunication = portGetTickCount();
+				}
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_FINAL)
+				{
+					//PINFO("GOT RTLS_DEMO_MSG_TAG_FINAL from %llx %u",*(uint64*)&dw_event.msgu.frame[13],getmstime()-startTime);
+				}
+			}
+			if(instance_data[0].mode == TAG )
+			{
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_ANCH_RESP)
+				{
+					lastCommunication = portGetTickCount();
+				}
+				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_ANCH_TOFR)
+				{
+					lastCommunication = portGetTickCount();
+				}
+			}
 
 	    	instance_data[instance].stoptimer = 1;
 

@@ -65,58 +65,6 @@ typedef enum
 } led_t;
 
 
-#define SPIy_PRESCALER              SPI_BaudRatePrescaler_128
-
-#ifdef DW1000_EVK
-#define SPIy                        SPI2
-#define SPIy_GPIO                   GPIOB
-#define SPIy_CS                     GPIO_Pin_12
-#define SPIy_CS_GPIO                GPIOB
-#define SPIy_SCK                    GPIO_Pin_13
-#define SPIy_MISO                   GPIO_Pin_14
-#define SPIy_MOSI                   GPIO_Pin_15
-
-#define LCD_RW                      GPIO_Pin_10
-#define LCD_RS                      GPIO_Pin_11
-
-#define SPIx_PRESCALER              SPI_BaudRatePrescaler_8
-
-#define SPIx                        SPI1
-#define SPIx_GPIO                   GPIOA
-#define SPIx_CS                     GPIO_Pin_4
-#define SPIx_CS_GPIO                GPIOA
-#define SPIx_SCK                    GPIO_Pin_5
-#define SPIx_MISO                   GPIO_Pin_6
-#define SPIx_MOSI                   GPIO_Pin_7
-
-#define DW1000_RSTn                 GPIO_Pin_0
-#define DW1000_RSTn_GPIO            GPIOA
-
-#define DECAIRQ                     GPIO_Pin_5
-#define DECAIRQ_GPIO                GPIOB
-#define DECAIRQ_EXTI                EXTI_Line5
-#define DECAIRQ_EXTI_PORT           GPIO_PinSource0			//GPIO_PortSourceGPIOB
-#define DECAIRQ_EXTI_PIN            GPIO_PinSource5
-#define DECAIRQ_EXTI_IRQn           EXTI0_1_IRQn			//EXTI9_5_IRQn
-#define DECAIRQ_EXTI_USEIRQ         ENABLE
-#define DECAIRQ_EXTI_NOIRQ          DISABLE
-
-#define TA_BOOT1                    GPIO_Pin_2
-#define TA_BOOT1_GPIO               GPIOB
-
-#define TA_RESP_DLY                 GPIO_Pin_0
-#define TA_RESP_DLY_GPIO            GPIOC
-
-#define TA_SW1_3                    GPIO_Pin_0
-#define TA_SW1_4                    GPIO_Pin_1
-#define TA_SW1_5                    GPIO_Pin_2
-#define TA_SW1_6                    GPIO_Pin_3
-#define TA_SW1_7                    GPIO_Pin_4
-#define TA_SW1_8                    GPIO_Pin_5
-#define TA_SW1_GPIO                 GPIOC
-
-#else
-
 #define SPIx_PRESCALER              SPI_BaudRatePrescaler_8
 
 #define SPIx                        SPI1
@@ -152,8 +100,6 @@ typedef enum
 #define USART1_TX_GPIO				GPIO_Pin_9
 #define USART1_RX_GPIO				GPIO_Pin_10
 #define USART1_PORT		            GPIOA
-
-#endif
 
 #define S1_SWITCH_ON  (1)
 #define S1_SWITCH_OFF (0)

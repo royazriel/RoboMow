@@ -201,7 +201,7 @@ extern "C" {
 
 
 //response delay time (Tag or Anchor when sending Final/Response messages respectively)
-#define FIXED_REPLY_DELAY       			150
+#define FIXED_REPLY_DELAY       			12
 #define FIXED_LONG_BLINK_RESPONSE_DELAY       (5*FIXED_REPLY_DELAY) //NOTE: this should be a multiple of FIXED_LONG_REPLY_DELAY see DELAY_MULTIPLE below
 #define DELAY_MULTIPLE				(FIXED_LONG_BLINK_RESPONSE_DELAY/FIXED_LONG_REPLY_DELAY - 1)
 

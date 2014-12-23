@@ -188,14 +188,10 @@ int instancesendpacket(instance_data_t *inst, int delayedTx)
 //
 int testapprun_s(instance_data_t *inst, int message)
 {
-	char buf[100];
-	sprintf(buf,"state num: %d",inst->testAppState);
-	//printUSART(buf);
     switch (inst->testAppState)
     {
 
         case TA_INIT :
-            printUSART("TA_INIT");
             switch (inst->mode)
             {
                 case TAG:
