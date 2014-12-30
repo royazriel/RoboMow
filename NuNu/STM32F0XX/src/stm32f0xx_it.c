@@ -122,6 +122,25 @@ void EXTI4_15_IRQHandler(void)
 {
 
 }
+
+void DMA1_Channel1_IRQHandler(void)
+{
+	UsartPrintf("DMA1_channel1 interrupt\r\n");
+}
+
+
+/**
+  * @brief  This function handles ADC interrupt request.
+  *         It manages the ADC in case of overrun
+  *         the ADC is stopped but not disabled,
+  * @param  None
+  * @retval None
+  */
+void ADC1_COMP_IRQHandler(void)
+{
+	UsartPrintf("ADC1 interrupt\r\n");
+}
+
 /******************************************************************************/
 /*                 STM32F0xx Peripherals Interrupt Handlers                   */
 /*  Add here the Interrupt Handler for the used peripheral(s) (PPP), for the  */

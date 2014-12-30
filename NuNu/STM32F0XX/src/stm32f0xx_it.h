@@ -45,6 +45,8 @@ void EXTI0_1_IRQHandler(void);
 void EXTI4_15_IRQHandler(void);
 void ETH_IRQHandler(void);
 void ETH_WKUP_IRQHandler(void);
+void DMA1_Channel1_IRQHandler(void);
+void ADC1_COMP_IRQHandler(void);
 
 
 #ifdef __cplusplus

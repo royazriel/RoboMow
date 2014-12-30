@@ -44,6 +44,7 @@ main(int argc, char* argv[])
 	InitI2c();
 	InitSpi();
 	InitPwm();
+	InitAdc();
 
 	LIS3DH_Configure();
 
@@ -54,7 +55,7 @@ main(int argc, char* argv[])
 		response = GetOneAxisTilt( &tilt );
 		if(response==MEMS_SUCCESS)
 		{
-#if 1
+#if 0
 			//print data values
 			UsartPrintf( "tilt %2.2f \r\n",tilt);
 
@@ -84,8 +85,10 @@ main(int argc, char* argv[])
 				{
 					LED_PORT->BSRR |= LED1;
 				}
-				MOTOR_PWM_R += 100;
-				UsartPrintf( "CCR = %d \r\n",MOTOR_PWM_R);
+
+
+				UsartPrintf("%d %d %d %d %d %d\r\n",GetAdcData()[0],GetAdcData()[1],GetAdcData()[2],GetAdcData()[3],GetAdcData()[4],GetAdcData()[5]);
+
 				usleep(500000);
 			}
 #endif

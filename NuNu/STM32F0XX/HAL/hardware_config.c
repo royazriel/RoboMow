@@ -8,6 +8,8 @@
 #include "hardware_config.h"
 #include "common.h"
 
+__IO uint16_t ADC_array[NUMBER_OF_ADC_CHANNEL]; //Array to store the values coming from the ADC and copied by DMA
+
 /* System tick 32 bit variable defined by the platform */
 extern __IO unsigned long time32_incr;
 
@@ -186,33 +188,37 @@ int InitSpi()
 	SPI_InitTypeDef SPI_InitStructure;
 	GPIO_InitTypeDef GPIO_InitStructure;
 
- /* Enable the peripheral clock of GPIOA */
-	RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
-
-	GPIO_InitStructure.GPIO_Pin = SPIx_CLK;
+	GPIO_InitStructure.GPIO_Pin = SPI_CLK;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
-	GPIO_Init(SPIx_PORT, &GPIO_InitStructure);
+	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
 
 	/* Configure SD_SPI pins: MISO */
-	GPIO_InitStructure.GPIO_Pin = SPIx_MISO;
-	GPIO_Init(SPIx_PORT, &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = SPI_MISO;
+	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
 
 	/* Configure SD_SPI pins: MOSI */
-	GPIO_InitStructure.GPIO_Pin = SPIx_MOSI;
-	GPIO_Init(SPIx_PORT, &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = SPI_MOSI;
+	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
 
 	// SPIx CS pin setup
-	GPIO_InitStructure.GPIO_Pin = SPIx_CS;
+	GPIO_InitStructure.GPIO_Pin = SPI_CS;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_Init(SPIx_PORT, &GPIO_InitStructure);
+	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
 
 
+	GPIO_PinAFConfig( SPI_PORT, SPI_CLK_AF_SRC, GPIO_AF_0 );
+	GPIO_PinAFConfig( SPI_PORT, SPI_MISO_AF_SRC, GPIO_AF_0 );
+	GPIO_PinAFConfig( SPI_PORT, SPI_MOSI_AF_SRC, GPIO_AF_0 );
+
+	RCC_APB1PeriphClockCmd( RCC_APB1Periph_SPI2, ENABLE);
+
+#if 0
 	/* (1) Select AF mode (10) on PA4, PA5, PA6, PA7 */
 	/* (2) AF0 for SPI1 signals */
 	GPIOA->MODER = (GPIOA->MODER
@@ -226,6 +232,7 @@ int InitSpi()
 
 	/* Enable the peripheral clock SPI1 */
 	RCC->APB2ENR |= RCC_APB2ENR_SPI1EN;
+#endif
 
 	// SPIx Mode setup
 	SPI_InitStructure.SPI_Direction = SPI_Direction_2Lines_FullDuplex;
@@ -238,15 +245,15 @@ int InitSpi()
 	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial = 7;
 
-	SPI_Init(SPI1, &SPI_InitStructure);
+	SPI_Init(SPI2, &SPI_InitStructure);
 
-	SPI_RxFIFOThresholdConfig(SPI1,SPI_RxFIFOThreshold_QF);  //fifo rx level 8bit
+	SPI_RxFIFOThresholdConfig(SPI2,SPI_RxFIFOThreshold_QF);  //fifo rx level 8bit
 
 	// Disable SPIx SS Output
-	SPI_SSOutputCmd(SPI1, DISABLE);
+	SPI_SSOutputCmd(SPI2, DISABLE);
 
 	// Enable SPIx
-	SPI_Cmd(SPI1, ENABLE);
+	SPI_Cmd(SPI2, ENABLE);
 
     return 0;
 }
@@ -263,10 +270,10 @@ int InitPwm()
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP ;
-	GPIO_Init(MOTOR_GPIO_PORT, &GPIO_InitStructure);
+	GPIO_Init(MOTOR_PWM_GPIO_PORT, &GPIO_InitStructure);
 
-	GPIO_PinAFConfig(MOTOR_GPIO_PORT, MOTOR_DRV_R_AF_SRC, GPIO_AF_1);  	//TIM3 ONLY
-	GPIO_PinAFConfig(MOTOR_GPIO_PORT, MOTOR_DRV_L_AF_SRC, GPIO_AF_1);	//TIM3 ONLY
+	GPIO_PinAFConfig(MOTOR_PWM_GPIO_PORT, MOTOR_DRV_R_AF_SRC, GPIO_AF_1);  	//TIM3 ONLY
+	GPIO_PinAFConfig(MOTOR_PWM_GPIO_PORT, MOTOR_DRV_L_AF_SRC, GPIO_AF_1);	//TIM3 ONLY
 
 	RCC_APB1PeriphClockCmd(RCC_APB1ENR_TIM3EN, ENABLE);
 //
@@ -298,4 +305,80 @@ int InitPwm()
 	/* TIM1 Main Output Enable */
 	//TIM_CtrlPWMOutputs(TIM3, ENABLE);  //TODO: this function exist in sample in our code its exiting
 	return 0;
+}
+
+int InitAdc()
+{
+	ADC_InitTypeDef ADC_InitStructure;
+	GPIO_InitTypeDef GPIO_InitStructure;
+	DMA_InitTypeDef  DMA_InitStructure;
+
+	/* ADC1 DeInit */
+	ADC_DeInit(ADC1);
+
+	/* Enable ADC and GPIO clocks ****************************************/
+	RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+
+	/* Configure ADC1 Channel12 pin as analog input ******************************/
+	GPIO_InitStructure.GPIO_Pin = AN0 | AN1 | AN2 | AN3 | AN4 |AN5;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AN;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
+	GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+	/* Initialize ADC structure */
+	ADC_StructInit(&ADC_InitStructure);
+
+	/* Configure the ADC1 in continous mode withe a resolutuion equal to 12 bits  */
+	ADC_InitStructure.ADC_Resolution = ADC_Resolution_12b;
+	ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;
+	ADC_InitStructure.ADC_ExternalTrigConvEdge = ADC_ExternalTrigConvEdge_None;
+	ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_T1_TRGO;
+	ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+	ADC_InitStructure.ADC_ScanDirection = ADC_ScanDirection_Upward;
+	ADC_Init(ADC1, &ADC_InitStructure);
+
+	/* Convert the ADC1 Channel 12 with 239.5 Cycles as sampling time */
+	ADC_ChannelConfig(ADC1, ADC_Channel_10  | ADC_Channel_11 | ADC_Channel_12 | ADC_Channel_13 | ADC_Channel_14 | ADC_Channel_15, ADC_SampleTime_239_5Cycles);
+
+	/* ADC Calibration */
+	ADC_GetCalibrationFactor(ADC1);
+
+	/* Enable DMA request after last transfer (OneShot-ADC mode) */
+	ADC_DMARequestModeConfig(ADC1, ADC_DMAMode_Circular);
+
+	/* Enable ADCperipheral[PerIdx] */
+	ADC_Cmd(ADC1, ENABLE);
+
+	/* Enable ADC_DMA */
+	ADC_DMACmd(ADC1, ENABLE);
+
+	/* Wait the ADCEN falg */
+	while(!ADC_GetFlagStatus(ADC1, ADC_FLAG_ADRDY));
+
+	/* ADC1 regular Software Start Conv */
+	ADC_StartOfConversion(ADC1);
+
+	/* Enable DMA1 clock */
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+	/* DMA1 Stream1 channel1 configuration **************************************/
+	DMA_InitStructure.DMA_PeripheralBaseAddr = (uint32_t) (&(ADC1->DR));
+	DMA_InitStructure.DMA_MemoryBaseAddr = (uint32_t)ADC_array;
+	DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+	DMA_InitStructure.DMA_BufferSize = NUMBER_OF_ADC_CHANNEL;
+	DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+	DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Enable;
+	DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+	DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+	DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+	DMA_InitStructure.DMA_Priority = DMA_Priority_High;
+	DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+
+	DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+	DMA_Cmd(DMA1_Channel1, ENABLE);
+}
+
+uint16_t* GetAdcData()
+{
+	return ADC_array;
 }
