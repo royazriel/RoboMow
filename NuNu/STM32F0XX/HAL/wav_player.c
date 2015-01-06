@@ -41,7 +41,7 @@ void WavPlayerPlaySound( int fileId )
 	while (sWaveDataLength)
 	{
 		//FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-		memcpy( sBuffer2, (uint8_t *)(WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
+		memcpy( sBuffer2, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
 		//f_read (&F, Buffer2, _MAX_SS, &BytesRead);
 		sBufferSwapCounter++;
 		if (sWaveDataLength) sWaveDataLength -= DMA_BUFFER_SIZE;
@@ -63,7 +63,7 @@ void WavPlayerPlaySound( int fileId )
 		DMA1_Channel3->CCR = 0x2091;
 
 		//FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-		memcpy( sBuffer1, (uint8_t *)(WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
+		memcpy( sBuffer1, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
 		sBufferSwapCounter++;
 		//f_read (&F, Buffer1, _MAX_SS, &BytesRead);
 
