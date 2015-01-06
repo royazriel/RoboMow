@@ -141,6 +141,11 @@ void ADC1_COMP_IRQHandler(void)
 	UsartPrintf("ADC1 interrupt\r\n");
 }
 
+DMA1_Channel2_3_IRQHandler(void)
+{
+	//WavPlayerSwapBuffers();
+	//DMA_ClearITPendingBit(DMA1_FLAG_TC3);
+}
 /******************************************************************************/
 /*                 STM32F0xx Peripherals Interrupt Handlers                   */
 /*  Add here the Interrupt Handler for the used peripheral(s) (PPP), for the  */

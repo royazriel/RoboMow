@@ -8,7 +8,7 @@
 #include "stm32f0xx_usart.h"
 
 //PWM
-#define PWM_FREQUENCY			17570
+#define PWM_FREQUENCY			250000//17570
 #define MOTOR_DRV_R				GPIO_Pin_4
 #define MOTOR_DRV_R_AF_SRC		GPIO_PinSource4
 #define MOTOR_DRV_L				GPIO_Pin_5
@@ -65,15 +65,15 @@
 #define DAC_PORT				GPIOA
 
 //SPI
-#define SPI						SPI2
-#define SPI_CS					GPIO_Pin_12
-#define SPI_CLK					GPIO_Pin_13
-#define SPI_CLK_AF_SRC			GPIO_PinSource13
-#define SPI_MISO				GPIO_Pin_14
-#define SPI_MISO_AF_SRC			GPIO_PinSource14
-#define SPI_MOSI				GPIO_Pin_15
-#define SPI_MOSI_AF_SRC			GPIO_PinSource15
-#define SPI_PORT				GPIOB
+#define SPI_FLASH				SPI2
+#define SPI_FLASH_CS			GPIO_Pin_12
+#define SPI_FLASH_CLK			GPIO_Pin_13
+#define SPI_FLASH_SCLK_AF_SRC	GPIO_PinSource13
+#define SPI_FLASH_MISO			GPIO_Pin_14
+#define SPI_FLASH_MISO_AF_SRC	GPIO_PinSource14
+#define SPI_FLASH_MOSI			GPIO_Pin_15
+#define SPI_FLASH_MOSI_AF_SRC	GPIO_PinSource15
+#define SPI_FLASH_PORT			GPIOB
 
 //USART
 #define USART_DEBUG				USART1

@@ -10,6 +10,7 @@
 #include "hardware_config.h"
 #include "lis3dh_driver.h"
 #include "motor_control.h"
+#include "wav_player.h"
 // ----------------------------------------------------------------------------
 //
 // STM32F0 empty sample (trace via ITM).
@@ -37,14 +38,14 @@ main(int argc, char* argv[])
 	double tilt;
 	status_t response;
 
-
-	InitSystemTick();
 	InitGpio();
+	InitSystemTick();
 	InitUsartDebug();
 	InitI2c();
 	InitSpi();
 	InitPwm();
 	InitAdc();
+	InitDac();
 
 	LIS3DH_Configure();
 
@@ -86,8 +87,18 @@ main(int argc, char* argv[])
 					LED_PORT->BSRR |= LED1;
 				}
 
+				ErrorCode err = WavPlayerLoad( 0 );
+				if ( err != Valid_WAVE_File)
+				{
+					UsartPrintf("file not valid %d\r\n", err );
+				}
+				WavPlayerPlaySound(0);
+//				while(1)
+//				{
+//					WavPlayerLoadNextBuffer();
+//				}
 
-				UsartPrintf("%d %d %d %d %d %d\r\n",GetAdcData()[0],GetAdcData()[1],GetAdcData()[2],GetAdcData()[3],GetAdcData()[4],GetAdcData()[5]);
+				//UsartPrintf("%d %d %d %d %d %d\r\n",GetAdcData()[0],GetAdcData()[1],GetAdcData()[2],GetAdcData()[3],GetAdcData()[4],GetAdcData()[5]);
 
 				usleep(500000);
 			}

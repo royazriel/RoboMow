@@ -188,33 +188,33 @@ int InitSpi()
 	SPI_InitTypeDef SPI_InitStructure;
 	GPIO_InitTypeDef GPIO_InitStructure;
 
-	GPIO_InitStructure.GPIO_Pin = SPI_CLK;
+	GPIO_InitStructure.GPIO_Pin = SPI_FLASH_CLK;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd  = GPIO_PuPd_UP;
-	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
+	GPIO_Init(SPI_FLASH_PORT, &GPIO_InitStructure);
 
 	/* Configure SD_SPI pins: MISO */
-	GPIO_InitStructure.GPIO_Pin = SPI_MISO;
-	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = SPI_FLASH_MISO;
+	GPIO_Init(SPI_FLASH_PORT, &GPIO_InitStructure);
 
 	/* Configure SD_SPI pins: MOSI */
-	GPIO_InitStructure.GPIO_Pin = SPI_MOSI;
-	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = SPI_FLASH_MOSI;
+	GPIO_Init(SPI_FLASH_PORT, &GPIO_InitStructure);
 
 	// SPIx CS pin setup
-	GPIO_InitStructure.GPIO_Pin = SPI_CS;
+	GPIO_InitStructure.GPIO_Pin = SPI_FLASH_CS;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_10MHz;
 	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-	GPIO_Init(SPI_PORT, &GPIO_InitStructure);
+	GPIO_Init(SPI_FLASH_PORT, &GPIO_InitStructure);
 
 
-	GPIO_PinAFConfig( SPI_PORT, SPI_CLK_AF_SRC, GPIO_AF_0 );
-	GPIO_PinAFConfig( SPI_PORT, SPI_MISO_AF_SRC, GPIO_AF_0 );
-	GPIO_PinAFConfig( SPI_PORT, SPI_MOSI_AF_SRC, GPIO_AF_0 );
+	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_SCLK_AF_SRC, GPIO_AF_0 );
+	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_MISO_AF_SRC, GPIO_AF_0 );
+	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_MOSI_AF_SRC, GPIO_AF_0 );
 
 	RCC_APB1PeriphClockCmd( RCC_APB1Periph_SPI2, ENABLE);
 
@@ -381,4 +381,40 @@ int InitAdc()
 uint16_t* GetAdcData()
 {
 	return ADC_array;
+}
+
+int InitDac()
+{
+	DAC_InitTypeDef     DAC_InitStructure;
+	GPIO_InitTypeDef    GPIO_InitStructure;
+	DMA_InitTypeDef 	DMA_InitStructure;
+
+	/* TIM6 and DAC clocks enable */
+	RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM6 | RCC_APB1Periph_DAC, ENABLE);
+	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+	/* Configure DAC Channel1 as output */
+	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
+	/* Must be analogic (but works with other config which they have no effect) */
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AN;
+	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	/* DAC deinitialize */
+	DAC_DeInit();
+	DAC_StructInit(&DAC_InitStructure);
+
+	/* Fill DAC InitStructure */
+	DAC_InitStructure.DAC_Trigger = DAC_Trigger_T6_TRGO;
+	DAC_InitStructure.DAC_OutputBuffer = DAC_OutputBuffer_Disable;
+
+	/* DAC Channel1: 8bit right---------------------------------------------------*/
+	/* DAC Channel1 Init */
+	DAC_Init(DAC_Channel_1, &DAC_InitStructure);
+	/* Enable DAC Channel1: Once the DAC channel1 is enabled, PA.04 is
+	 automatically connected to the DAC converter. */
+	DAC_Cmd(DAC_Channel_1, ENABLE);
+	/* Enable DMA for DAC Channel1 */
+	DAC_DMACmd(DAC_Channel_1, ENABLE);  //TODO: check later
 }
