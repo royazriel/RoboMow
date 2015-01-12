@@ -1770,7 +1770,6 @@ status_t LIS3DH_SetSPIInterface(LIS3DH_SPIMode_t spi) {
 
 status_t LIS3DH_Configure()
 {
-	char buffer[100];
 	uint8_t id;
 	status_t response = MEMS_SUCCESS;
 
@@ -1779,40 +1778,35 @@ status_t LIS3DH_Configure()
 		response = LIS3DH_GetWHO_AM_I(&id);
 		if( response == MEMS_ERROR)
 		{
-			sprintf(buffer,"LIS3DH_GetWHO_AM_I Error \r\n",id);
-			UsartPrintf(buffer);
+			UsartPrintf("LIS3DH_GetWHO_AM_I Error \r\n" );
 			break;
 		}
 
 		response = LIS3DH_SetODR(LIS3DH_ODR_100Hz);
 		if( response == MEMS_ERROR)
 		{
-			sprintf(buffer,"LIS3DH_SetODR Error \r\n",id);
-			UsartPrintf(buffer);
+			UsartPrintf( "LIS3DH_SetODR Error \r\n" );
 			break;
 		}
 		//set PowerMode
 		response = LIS3DH_SetMode(LIS3DH_NORMAL);
 		if( response == MEMS_ERROR)
 		{
-			sprintf(buffer,"LIS3DH_SetMode Error \r\n",id);
-			UsartPrintf(buffer);
+			UsartPrintf( "LIS3DH_SetMode Error \r\n" );
 			break;
 		}
 		//set Fullscale
-		response = LIS3DH_SetFullScale(LIS3DH_FULLSCALE_4);
+		response = LIS3DH_SetFullScale(LIS3DH_FULLSCALE_4 );
 		if( response == MEMS_ERROR)
 		{
-			sprintf(buffer,"LIS3DH_SetFullScale Error \r\n",id);
-			UsartPrintf(buffer);
+			UsartPrintf( "LIS3DH_SetFullScale Error \r\n" );
 			break;
 		}
 		//set axis Enable
-		response = LIS3DH_SetAxis(LIS3DH_X_ENABLE /* | LIS3DH_Y_ENABLE | LIS3DH_Z_ENABLE*/ );
+		response = LIS3DH_SetAxis(LIS3DH_X_ENABLE | LIS3DH_Y_ENABLE /* LIS3DH_Z_ENABLE*/  );
 		if( response == MEMS_ERROR)
 		{
-			sprintf(LIS3DH_SetAxis,"LIS3DH_SetAxis Error \r\n",id);
-			UsartPrintf(buffer);
+			UsartPrintf( "LIS3DH_SetAxis Error \r\n" );
 			break;
 		}
 	}while(0);
@@ -1824,7 +1818,7 @@ status_t LIS3DH_Configure()
 	return response;
 }
 
-status_t GetOneAxisTilt( double* result )
+status_t GetOneAxisTilt( double* result, TiltDirection* dir )
 {
 	AxesRaw_t data;
 	status_t response = MEMS_SUCCESS;
@@ -1834,6 +1828,7 @@ status_t GetOneAxisTilt( double* result )
 	if(response== MEMS_SUCCESS)
 	{
 		//print data values
+		*dir = data.AXIS_Y < 0 ?  etTiltUp : etTiltDown;
 		double deg = data.AXIS_X / ONE_G_RESOLUTION;
 		deg = asin(deg) / PI * PI_IN_DEG ;
 		*result = deg;

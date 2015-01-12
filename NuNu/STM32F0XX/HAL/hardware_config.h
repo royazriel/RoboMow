@@ -6,9 +6,10 @@
 #include "stm32f0xx_i2c.h"
 #include "stm32f0xx_spi.h"
 #include "stm32f0xx_usart.h"
+#include "common.h"
 
 //PWM
-#define PWM_FREQUENCY			250000//17570
+#define PWM_FREQUENCY			17570
 #define MOTOR_DRV_R				GPIO_Pin_4
 #define MOTOR_DRV_R_AF_SRC		GPIO_PinSource4
 #define MOTOR_DRV_L				GPIO_Pin_5
@@ -26,6 +27,7 @@
 #define SENSE_PROX2				GPIO_Pin_7
 #define SENSE_PROX3				GPIO_Pin_8
 #define SENSE_PROX4				GPIO_Pin_9
+#define SENSE_PROX_PORT			GPIOB
 
 //ADC
 #define AN0					    GPIO_Pin_0
@@ -96,12 +98,15 @@
 #define PB1_STATE				GPIO_ReadInputDataBit(USER_PB_PORT,USER_PB1)
 #define PB2_STATE				GPIO_ReadInputDataBit(USER_PB_PORT,USER_PB2)
 
+#define BUMPER_FRONT_STATE		GPIO_ReadInputDataBit(SENSE_PROX_PORT, SENSE_PROX3)
+#define BUMPER_REAR_STATE		GPIO_ReadInputDataBit(SENSE_PROX_PORT, SENSE_PROX4)
+
 #define port_USART_DEBUG_busy_sending()  (USART_GetFlagStatus((USART_DEBUG),(USART_FLAG_TXE))==(RESET))
 #define port_USART_DEBUG_no_data()       (USART_GetFlagStatus((USART_DEBUG),(USART_FLAG_RXNE))==(RESET))
 #define port_USART_DEBUG_send_data(x)    USART_SendData((USART_DEBUG),(uint8_t)(x))
 #define port_USART_DEBUG_receive_data()  USART_ReceiveData(USART_DEBUG)
 
-#define portGetTickCount()          portGetTickCnt()
+#define GetMiliSecondCount()          portGetTickCnt()
 
 
 int InitSystemTick();
@@ -113,6 +118,7 @@ int InitI2c();
 int InitSpi();
 int InitPwm();
 int InitAdc();
+int InitDac();;
 uint16_t* GetAdcData();
 
 

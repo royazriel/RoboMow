@@ -81,7 +81,7 @@ void _exit(int status) {
 /* Return a clock that ticks at CLOCKS_PER_SEC Hz.  */
 clock_t _times_r(void *reent, struct tms * tp)
 {
-  clock_t timeval = portGetTickCount(); //time32_incr;
+  clock_t timeval = GetMiliSecondCount(); //time32_incr;
 
   if (tp)
     {

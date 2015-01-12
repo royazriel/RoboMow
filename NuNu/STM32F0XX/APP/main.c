@@ -10,7 +10,6 @@
 #include "hardware_config.h"
 #include "lis3dh_driver.h"
 #include "motor_control.h"
-#include "wav_player.h"
 // ----------------------------------------------------------------------------
 //
 // STM32F0 empty sample (trace via ITM).
@@ -31,13 +30,11 @@
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
+extern void StateMachineHandleStates();
+
 int
 main(int argc, char* argv[])
 {
-	char buffer[100];
-	double tilt;
-	status_t response;
-
 	InitGpio();
 	InitSystemTick();
 	InitUsartDebug();
@@ -47,34 +44,21 @@ main(int argc, char* argv[])
 	InitAdc();
 	InitDac();
 
+	UsartPrintf("\033c\r\n");
 	LIS3DH_Configure();
-
+	//MOTOR_PWM_R = MOTOR_PWM_L = LOW_SPEED;
 	while (1)
 	{
+//		if(PB1_STATE)
+//		{
+//			MOTOR_PWM_R = MOTOR_PWM_L = MOTOR_PWM_R -1;
+//			UsartPrintf("speed %d\r\n", MOTOR_PWM_R);
+//			usleep(50000);
+//		}
 
-		//get Acceleration Raw data
-		response = GetOneAxisTilt( &tilt );
-		if(response==MEMS_SUCCESS)
-		{
-#if 0
-			//print data values
-			UsartPrintf( "tilt %2.2f \r\n",tilt);
+#if 1
 
-			if( tilt > -10 && tilt < 10)
-			{
-				MotorsControlDrive( etSpeedMid, etDirForword  );
-			}
-			if( abs(tilt) > 10 )
-			{
-				if( tilt < 0 )
-				{
-					MotorsControlDrive( etSpeedLow, etDirCCW  );
-				}
-				else
-				{
-					MotorsControlDrive( etSpeedLow, etDirCW  );
-				}
-			}
+			StateMachineHandleStates();
 #else
 			/*******************************************************/
 			if(PB1_STATE)
@@ -103,9 +87,6 @@ main(int argc, char* argv[])
 				usleep(500000);
 			}
 #endif
-			/*******************************************************/
-		}
-
 	}
 }
 

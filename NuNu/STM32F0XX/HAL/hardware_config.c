@@ -8,7 +8,7 @@
 #include "hardware_config.h"
 #include "common.h"
 
-__IO uint16_t ADC_array[NUMBER_OF_ADC_CHANNEL]; //Array to store the values coming from the ADC and copied by DMA
+uint16_t ADC_array[NUMBER_OF_ADC_CHANNEL]; //Array to store the values coming from the ADC and copied by DMA
 
 /* System tick 32 bit variable defined by the platform */
 extern __IO unsigned long time32_incr;
@@ -61,6 +61,13 @@ int InitGpio()
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN ;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
 	GPIO_Init(USER_PB_PORT, &GPIO_InitStructure);
+
+	//Enable GPIO used for User button
+	GPIO_StructInit( &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = SENSE_PROX3 | SENSE_PROX4;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN ;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
+	GPIO_Init(SENSE_PROX_PORT, &GPIO_InitStructure);
 
 
 	//Enable GPIO used for Leds switch setting

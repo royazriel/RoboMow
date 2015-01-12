@@ -102,6 +102,11 @@ typedef enum {
   LIS3DH_HPFCF_3                       =               0x03
 } LIS3DH_HPFCutOffFreq_t;
 
+typedef enum {
+  etTiltUp =		0x01,
+  etTiltDown
+} TiltDirection;
+
 typedef struct {
   u16_t AUX_1;
   u16_t AUX_2;
@@ -518,7 +523,7 @@ status_t LIS3DH_GetTempRaw(i8_t* val);
 status_t LIS3DH_GetWHO_AM_I(u8_t* val);
 status_t LIS3DH_Get6DPosition(u8_t* val);
 status_t LIS3DH_Configure();
-status_t GetOneAxisTilt( double* result );
+status_t GetOneAxisTilt( double* result, TiltDirection* dir );
 //Generic
 // i.e. u8_t LIS3DH_ReadReg(u8_t Reg, u8_t* Data);
 // i.e. u8_t LIS3DH_WriteReg(u8_t Reg, u8_t Data);
