@@ -6,6 +6,7 @@
  */
 
 #include "hardware_config.h"
+#include "motor_control.h"
 #include "common.h"
 
 uint16_t ADC_array[NUMBER_OF_ADC_CHANNEL]; //Array to store the values coming from the ADC and copied by DMA
@@ -57,7 +58,7 @@ int InitGpio()
 
 	//Enable GPIO used for User button
 	GPIO_StructInit( &GPIO_InitStructure);
-	GPIO_InitStructure.GPIO_Pin = USER_PB1 | USER_PB2;
+	GPIO_InitStructure.GPIO_Pin = USER_PB1 /*| USER_PB2*/;
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN ;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
 	GPIO_Init(USER_PB_PORT, &GPIO_InitStructure);
@@ -223,7 +224,7 @@ int InitSpi()
 	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_MISO_AF_SRC, GPIO_AF_0 );
 	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_MOSI_AF_SRC, GPIO_AF_0 );
 
-	RCC_APB1PeriphClockCmd( RCC_APB1Periph_SPI2, ENABLE);
+	RCC_APB2PeriphClockCmd( SPI_FLASH_RCC_CLK, ENABLE);
 
 #if 0
 	/* (1) Select AF mode (10) on PA4, PA5, PA6, PA7 */
@@ -252,15 +253,17 @@ int InitSpi()
 	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial = 7;
 
-	SPI_Init(SPI2, &SPI_InitStructure);
+	SPI_Init(SPI_FLASH, &SPI_InitStructure);
 
-	SPI_RxFIFOThresholdConfig(SPI2,SPI_RxFIFOThreshold_QF);  //fifo rx level 8bit
+	SPI_RxFIFOThresholdConfig(SPI_FLASH,SPI_RxFIFOThreshold_QF);  //fifo rx level 8bit
 
 	// Disable SPIx SS Output
-	SPI_SSOutputCmd(SPI2, DISABLE);
+	SPI_SSOutputCmd(SPI_FLASH, DISABLE);
 
 	// Enable SPIx
-	SPI_Cmd(SPI2, ENABLE);
+	SPI_Cmd(SPI_FLASH, ENABLE);
+
+	SPI_FLASH_PORT->BSRR |= SPI_FLASH_CS;
 
     return 0;
 }
@@ -300,20 +303,54 @@ int InitPwm()
 	TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
 	TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCIdleState_Reset;
 
-	TIM_OCInitStructure.TIM_Pulse = 500;
+	TIM_OCInitStructure.TIM_Pulse = STOP_SPEED;
 	TIM_OC1Init(TIM3, &TIM_OCInitStructure);
 
-	TIM_OCInitStructure.TIM_Pulse = 500;
+	TIM_OCInitStructure.TIM_Pulse = STOP_SPEED;
 	TIM_OC2Init(TIM3, &TIM_OCInitStructure);
 
 	/* TIM1 counter enable */
 	TIM_Cmd(TIM3, ENABLE);
 
-	/* TIM1 Main Output Enable */
-	//TIM_CtrlPWMOutputs(TIM3, ENABLE);  //TODO: this function exist in sample in our code its exiting
+
 	return 0;
 }
 
+
+int InitEncoders()
+{
+	TIM_TimeBaseInitTypeDef TIM_TimeBaseStructure;
+	GPIO_InitTypeDef GPIO_InitStructure;
+
+	GPIO_InitStructure.GPIO_Pin = ENCODER_PIN_R | ENCODER_PIN_L;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_2MHz;
+	GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
+	GPIO_Init(ENCODER_PORT, &GPIO_InitStructure);
+
+
+	GPIO_PinAFConfig(ENCODER_PORT, ENCODER_R_AF_SRC, GPIO_AF_2 );  // PA1 TIM2_CH2
+	GPIO_PinAFConfig(ENCODER_PORT, ENCODER_L_AF_SRC,  GPIO_AF_0);  // PA2 TIM15_CH1
+
+	RCC_APB1PeriphClockCmd(ENCODER_RCC_CLK_R, ENABLE);
+	RCC_APB2PeriphClockCmd(ENCODER_RCC_CLK_L, ENABLE);
+
+	TIM_TimeBaseStructure.TIM_Prescaler = 0;
+	TIM_TimeBaseStructure.TIM_Period = 0xFFFFFFFF; // Maximal
+	TIM_TimeBaseStructure.TIM_ClockDivision = TIM_CKD_DIV1;
+	TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+	TIM_TimeBaseInit(TIM2, &TIM_TimeBaseStructure);
+	TIM_TimeBaseInit(TIM15, &TIM_TimeBaseStructure);
+
+	TIM_TIxExternalClockConfig(ENCODER_R, TIM_TIxExternalCLK1Source_TI2, TIM_ICPolarity_Rising, 0);
+	TIM_TIxExternalClockConfig(ENCODER_L, TIM_TIxExternalCLK1Source_TI1, TIM_ICPolarity_Rising, 0);
+
+	TIM_Cmd(ENCODER_R, ENABLE);
+	TIM_Cmd(ENCODER_L, ENABLE);
+
+	return 0;
+}
 int InitAdc()
 {
 	ADC_InitTypeDef ADC_InitStructure;

@@ -10,6 +10,7 @@
 #include "hardware_config.h"
 #include "lis3dh_driver.h"
 #include "motor_control.h"
+#include "flash_spi.h"
 // ----------------------------------------------------------------------------
 //
 // STM32F0 empty sample (trace via ITM).
@@ -32,34 +33,78 @@
 
 extern void StateMachineHandleStates();
 
+
+ void flashUnitTest()
+ {
+	 uint8_t string1[10] = "hello\0";
+	 uint8_t string2[10] = "bye\0";
+	 uint8_t string3[10] = {0,};
+
+
+	 FlashSpiEraseSector(0);
+	 FlashSpiWriteBuffer(string1, 0, 6);
+	 UsartPrintf(string1);
+	 UsartPrintf("\r\n");
+	 FlashSpiReadBuffer(string3,0,6);
+	 UsartPrintf(string3);
+	 UsartPrintf("\r\n");
+	 if(strncmp(string1,string3,6)==0)
+	 {
+		 UsartPrintf("erasing writing reading to first sector success\r\n");
+	 }
+
+	 FlashSpiEraseSector(2047); //erase last sector
+	 FlashSpiWriteBuffer(string2, 2047* 256, 4);
+	 UsartPrintf(string2);
+	 UsartPrintf("\r\n");
+	 FlashSpiReadBuffer(string3,2047*256,4);
+	 UsartPrintf(string3);
+	 UsartPrintf("\r\n");
+	 if(strncmp(string2,string3,4)==0)
+	 {
+		 UsartPrintf("erasing writing reading to last sector success\r\n");
+	 }
+ }
+
 int
 main(int argc, char* argv[])
 {
+	uint8_t string[10] = {0,};
+
 	InitGpio();
 	InitSystemTick();
 	InitUsartDebug();
 	InitI2c();
-	InitSpi();
+	//InitSpi();
 	InitPwm();
+	InitEncoders();
 	InitAdc();
 	InitDac();
 
-	UsartPrintf("\033c\r\n");
+	UsartPrintf("\033cNUNU Project!!\r\n");
 	LIS3DH_Configure();
-	//MOTOR_PWM_R = MOTOR_PWM_L = LOW_SPEED;
-	while (1)
+
+	while(1)
 	{
+		StateMachineHandleStates();
+	}
+
+//	while(1)
+//	{
 //		if(PB1_STATE)
 //		{
-//			MOTOR_PWM_R = MOTOR_PWM_L = MOTOR_PWM_R -1;
-//			UsartPrintf("speed %d\r\n", MOTOR_PWM_R);
-//			usleep(50000);
+//			UsartPrintf("flashId: 0x%x\r\n",FlashSpiReadID());
+//			FlashSpiWriteBuffer("aaaaa",1000,6);
+//			FlashSpiReadBuffer(string,1000,6);
+//			flashUnitTest();
+//			usleep(500000);
 //		}
+//	}
 
-#if 1
 
-			StateMachineHandleStates();
-#else
+
+
+#if 0
 			/*******************************************************/
 			if(PB1_STATE)
 			{
@@ -87,7 +132,6 @@ main(int argc, char* argv[])
 				usleep(500000);
 			}
 #endif
-	}
 }
 
 #pragma GCC diagnostic pop

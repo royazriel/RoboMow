@@ -9,12 +9,15 @@
 #include "motor_control.h"
 #include "lis3dh_driver.h"
 
-#define DEFAULT_SPEED LOW_SPEED
+#define DEFAULT_SPEED (WHEEL_PERIMETER/4.5f)  //~0.05 meter/sec
+#define DRIVE_UP_DEFAULT_SPEED (DEFAULT_SPEED + 0.1)  //meter/sec
+#define DRIVE_DOWN_DEFAULT_SPEED  DEFAULT_SPEED  //meter/sec
 #define DEFAULT_RPS	  RPS_LOW_SPEED
 #define DEFAULT_TIME_BETWEEN_STATES 300
-#define TILT_ANGLE_TOLLERANCE 10.0f //deg
+#define TILT_ANGLE_TOLLERANCE 3.0f //deg
 #define WHEEL_METER_TO_MILISEC(x)	1000/DEFAULT_RPS*(x/WHEEL_PERIMETER)
-#define TILT_GAIN	5
+#define TILT_GAIN	0.005f
+#define REVERSE_5CM	0.05f
 typedef enum
 {
 	etStatesWaitForInit,
@@ -121,74 +124,86 @@ void StateMachineHandleStates()
 		case etStatesWaitForInit:
 			if(!BUMPER_FRONT_STATE)
 			{
-				MotorsControlDrive(DEFAULT_SPEED, etDirCCW);
+				MotorsControlDrive(DEFAULT_SPEED,DEFAULT_SPEED, etDirCCW);
 				sCurrentState = etStatesFaceLeft;
 			}
-//			res = LIS3DH_GetAccAxesRaw(&data);
-//			if(res == MEMS_SUCCESS )
-//			{
-//				UsartPrintf("x %d y %d\r\n",data.AXIS_X,data.AXIS_Y);
-//			}
 			break;
 		case etStatesFaceLeft:
+			MotorsControlDrive(DEFAULT_SPEED,DEFAULT_SPEED, etDirCCW);
 			res = GetOneAxisTilt( &tilt, & dir);
 			if(res == MEMS_SUCCESS )
 			{
-				//UsartPrintf("tilt %f dir %s\r\n",tilt, dir == etTiltUp ? "UP":"DOWN");
+
 				if( tilt  < -90.0f + TILT_ANGLE_TOLLERANCE)
 				{
-					MotorsControlDrive( etSpeedStop, etDirReverse);
+					UsartPrintf("tilt %f dir %s\r\n",tilt, dir == etTiltUp ? "UP":"DOWN");
+					MotorsControlDrive( 0,0, etDirStop);
 					sWaitBeforeNextState = 1;	//prevent inertia
 					sCurrentState = etStatesFaceLeftDone;
 				}
 			}
 			break;
 		case etStatesFaceLeftDone:
-				MotorsControlDrive( DEFAULT_SPEED, etDirForward);
+				MotorsControlDrive( DEFAULT_SPEED,DEFAULT_SPEED, etDirForward);
 				sWaitBeforeNextState = 0;
 				sCurrentState = etStatesDriveLeft;
 			break;
 		case etStatesDriveLeft:
+			MotorsControlDrive( DEFAULT_SPEED,DEFAULT_SPEED, etDirForward);
 			if(!BUMPER_FRONT_STATE)
 			{
-				MotorsControlDrive( etSpeedStop, etDirReverse);
+				UsartPrintf("Front bummper - End of Drive Left\r\n");
+				MotorsControlDrive( 0,0, etDirStop);
 				sWaitBeforeNextState = 1;
 				sCurrentState = etStatesDriveLeftDone;
 			}
 			break;
 		case etStatesDriveLeftDone:
-			MotorsControlDrive( DEFAULT_SPEED, etDirReverse);
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirReverse);
 			sWaitBeforeNextState = 0;
 			sCurrentState = etStatesShortReverse;
+			MotorControlResetDistance();
 			break;
 		case etStatesShortReverse:
-			if(GetMiliSecondCount()- sCurrentStateStartTime > WHEEL_METER_TO_MILISEC(0.05))  //5cm
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirReverse);
+			if( MotorControlGetDistance(etMotorLeft)> REVERSE_5CM && MotorControlGetDistance(etMotorRight)> REVERSE_5CM)
 			{
-				MotorsControlDrive( etSpeedStop, etDirReverse);
+				UsartPrintf("R %f meter L %f meters  - End of Short Reverse\r\n", MotorControlGetDistance(etMotorRight), MotorControlGetDistance(etMotorLeft));
+				MotorsControlDrive( 0,0, etDirStop);
 				sWaitBeforeNextState = 1;
 				sCurrentState = etStatesShortReverseDone;
 			}
 			break;
+
 		case etStatesShortReverseDone:
-			MotorsControlDrive(DEFAULT_SPEED, etDirCW);
+			MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCW);
 			sWaitBeforeNextState = 0;
 			sCurrentState = etStatesFaceUp;
 			break;
 		case etStatesFaceUp:
+			if( sPrevState == etStatesShortReverseDone  )
+			{
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCW);
+			}
+			if( sPrevState == etStatesDriveLeft1Done  )
+			{
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCCW);
+			}
 			res = GetOneAxisTilt( &tilt, & dir);
 			if(res == MEMS_SUCCESS )
 			{
-				//UsartPrintf("tilt %f dir %s\r\n",tilt, dir == etTiltUp ? "UP":"DOWN");
+
 				if( dir == etTiltUp && abs(tilt) < TILT_ANGLE_TOLLERANCE )
 				{
-					MotorsControlDrive( etSpeedStop, etDirReverse);
+					UsartPrintf("tilt %f dir %s\r\n",tilt, dir == etTiltUp ? "UP":"DOWN");
+					MotorsControlDrive( 0,0, etDirStop);
 					sWaitBeforeNextState = 1;	//prevent inertia
 					sCurrentState = etStatesFaceUpDone;
 				}
 			}
 			break;
 		case etStatesFaceUpDone:
-			MotorsControlDrive( DEFAULT_SPEED, etDirForward);
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirForward);
 			sWaitBeforeNextState = 0;
 			sCurrentState = etStatesDriveUpDown;
 			debugTimer = GetMiliSecondCount();
@@ -197,26 +212,41 @@ void StateMachineHandleStates()
 			res = GetOneAxisTilt( &tilt, & dir);
 			if(res == MEMS_SUCCESS )
 			{
-				//if( abs(tilt)>TILT_ANGLE_TOLLERANCE )
-				//{
+				UsartPrintf("tilt %2.2f ", tilt);
+				if( sPrevState == etStatesFaceUpDone)
+				{
+					UsartPrintf("Up " );
 					if(tilt > 0)
 					{
-						MotorsControlDrive( DEFAULT_SPEED-(tilt*TILT_GAIN), etDirForwardRightFaster);
+						MotorsControlDrive( DRIVE_UP_DEFAULT_SPEED+(tilt*TILT_GAIN), DRIVE_UP_DEFAULT_SPEED, etDirForward);
 					}
 					if(tilt < 0)
 					{
-						MotorsControlDrive( DEFAULT_SPEED+(tilt*TILT_GAIN), etDirForwardLeftFaster);
+						MotorsControlDrive( DRIVE_UP_DEFAULT_SPEED, DRIVE_UP_DEFAULT_SPEED-(tilt*TILT_GAIN), etDirForward);
 					}
-				//}
-				if(GetMiliSecondCount()-debugTimer> 500)
-				{
-					UsartPrintf("R Speed: %d  L Speed: %d\r\n", MOTOR_PWM_R, MOTOR_PWM_L);
-					debugTimer = GetMiliSecondCount();
 				}
+				if( sPrevState == etStatesFaceDownDone)
+				{
+					UsartPrintf("Dn " );
+					if(tilt > 0)
+					{
+						MotorsControlDrive( DRIVE_DOWN_DEFAULT_SPEED, DRIVE_DOWN_DEFAULT_SPEED+(tilt*TILT_GAIN), etDirForward);
+					}
+					if(tilt < 0)
+					{
+						MotorsControlDrive( DRIVE_DOWN_DEFAULT_SPEED-(tilt*TILT_GAIN), DRIVE_DOWN_DEFAULT_SPEED, etDirForward);
+					}
+				}
+//				if(GetMiliSecondCount()-debugTimer> 500)
+//				{
+//					UsartPrintf("R Speed: %d  L Speed: %d\r\n", MOTOR_PWM_R, MOTOR_PWM_L);
+//					debugTimer = GetMiliSecondCount();
+//				}
 			}
 			if(!BUMPER_FRONT_STATE)
 			{
-				MotorsControlDrive( etSpeedStop, etDirReverse);
+				UsartPrintf("Front bumper - End of etStatesDriveUpDown\r\n");
+				MotorsControlDrive( 0,0, etDirStop);
 				sWaitBeforeNextState = 1;
 				if(sPrevState == etStatesFaceUpDone)
 				{
@@ -230,14 +260,17 @@ void StateMachineHandleStates()
 			}
 			break;
 		case etStatesDriveUpDownDone:
-			MotorsControlDrive( DEFAULT_SPEED, etDirReverse);
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirReverse);
 			sWaitBeforeNextState = 0;
 			sCurrentState = etStatesShortReverse1;
+			MotorControlResetDistance();
 			break;
 		case etStatesShortReverse1:
-			if(GetMiliSecondCount()- sCurrentStateStartTime > WHEEL_METER_TO_MILISEC(0.05))  //5cm
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirReverse);
+			if( MotorControlGetDistance(etMotorLeft)> REVERSE_5CM && MotorControlGetDistance(etMotorRight)> REVERSE_5CM)  //5cm
 			{
-				MotorsControlDrive( etSpeedStop, etDirReverse);
+				UsartPrintf("R %f meter L %f meters  - End of Short Reverse1\r\n", MotorControlGetDistance(etMotorRight), MotorControlGetDistance(etMotorLeft));
+				MotorsControlDrive( 0,0, etDirStop);
 				sWaitBeforeNextState = 1;
 				sCurrentState = etStatesShortReverse1Done;
 			}
@@ -245,13 +278,13 @@ void StateMachineHandleStates()
 		case etStatesShortReverse1Done:
 			if( nextTurn == etTurnRight)
 			{
-				MotorsControlDrive(DEFAULT_SPEED, etDirCW);
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCW);
 				sWaitBeforeNextState = 0;
 				sCurrentState = etStatesFaceRight;
 			}
 			if( nextTurn == etTurnLeft)
 			{
-				MotorsControlDrive(DEFAULT_SPEED, etDirCCW);
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCCW);
 				sWaitBeforeNextState = 0;
 				sCurrentState = etStatesFaceLeft1;
 			}
@@ -259,13 +292,21 @@ void StateMachineHandleStates()
 			break;
 		case etStatesFaceLeft1:
 		case etStatesFaceRight:
+			if( sCurrentState == etStatesFaceRight)
+			{
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCW);
+			}
+			if( sCurrentState == etStatesFaceLeft1)
+			{
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCCW);
+			}
 			res = GetOneAxisTilt( &tilt, & dir);
 			if(res == MEMS_SUCCESS )
 			{
 				//UsartPrintf("tilt %f dir %s\r\n",tilt, dir == etTiltUp ? "UP":"DOWN");
 				if( tilt > 90.0 - TILT_ANGLE_TOLLERANCE )
 				{
-					MotorsControlDrive( etSpeedStop, etDirReverse);
+					MotorsControlDrive( 0,0, etDirStop);
 					sWaitBeforeNextState = 1;	//prevent inertia
 					if( sCurrentState == etStatesFaceRight)
 					{
@@ -280,18 +321,22 @@ void StateMachineHandleStates()
 			break;
 		case etStatesFaceLeft1Done:
 		case etStatesFaceRightDone:
-			MotorsControlDrive( DEFAULT_SPEED, etDirForward);
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirForward);
 			sWaitBeforeNextState = 0;
 			if(sCurrentState == etStatesFaceRightDone)
 				sCurrentState = etStatesDriveRight;
 			if(sCurrentState == etStatesFaceLeft1Done)
 				sCurrentState = etStatesDriveLeft1;
+			MotorControlResetDistance();
 			break;
 		case etStatesDriveLeft1:
 		case etStatesDriveRight:
-			if(GetMiliSecondCount()- sCurrentStateStartTime > WHEEL_METER_TO_MILISEC(DISTANCE_BETWEEN_WHEELS-OVERLAP_COVERAGE_SIZE))  //5cm
+			MotorsControlDrive( DEFAULT_SPEED, DEFAULT_SPEED, etDirForward);
+			if( MotorControlGetDistance(etMotorLeft)> (DISTANCE_BETWEEN_WHEELS-OVERLAP_COVERAGE_SIZE ) &&
+					MotorControlGetDistance(etMotorRight) > DISTANCE_BETWEEN_WHEELS-OVERLAP_COVERAGE_SIZE)  //5cm
 			{
-				MotorsControlDrive( etSpeedStop, etDirReverse);
+				UsartPrintf("R %f meter L %f meters  - End of Drive To next leg\r\n", MotorControlGetDistance(etMotorRight), MotorControlGetDistance(etMotorLeft));
+				MotorsControlDrive( 0,0, etDirStop);
 				sWaitBeforeNextState = 1;
 				if(sCurrentState == etStatesDriveRight )
 					sCurrentState = etStatesDriveRightDone;
@@ -304,29 +349,30 @@ void StateMachineHandleStates()
 			sWaitBeforeNextState = 0;
 			if( sCurrentState == etStatesDriveRightDone  )
 			{
-				MotorsControlDrive(DEFAULT_SPEED, etDirCW);
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCW);
 				sCurrentState = etStatesFaceDown;
 			}
 			if( sCurrentState == etStatesDriveLeft1Done  )
 			{
-				MotorsControlDrive(DEFAULT_SPEED, etDirCCW);
+				MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCCW);
 				sCurrentState = etStatesFaceUp;
 			}
 			break;
 		case etStatesFaceDown:
+			MotorsControlDrive(DEFAULT_SPEED, DEFAULT_SPEED, etDirCW);
 			res = GetOneAxisTilt( &tilt, & dir);
 			if(res == MEMS_SUCCESS )
 			{
 				if( dir == etTiltDown && tilt < TILT_ANGLE_TOLLERANCE )
 				{
-					MotorsControlDrive( etSpeedStop, etDirReverse);
+					MotorsControlDrive( 0,0, etDirStop);
 					sWaitBeforeNextState = 1;	//prevent inertia
 					sCurrentState = etStatesFaceDownDone;
 				}
 			}
 			break;
 		case etStatesFaceDownDone:
-			MotorsControlDrive( DEFAULT_SPEED, etDirForward);
+			MotorsControlDrive( DEFAULT_SPEED,DEFAULT_SPEED, etDirForward);
 			sWaitBeforeNextState = 0;
 			sCurrentState = etStatesDriveUpDown;
 			break;

@@ -22,7 +22,35 @@
 #include "flash_spi.h"
 
 /**
-  * @brief  Erases the specified FLASH sector.
+  * @brief  Erases the specified FLASH block. 64k
+  * @param  SectorAddr: address of the block to erase.
+  * @retval None
+  */
+void FlashSpiEraseBlock(uint32_t BlockAddr)
+{
+  /*!< Send write enable instruction */
+  FlashSpiWriteEnable();
+
+  /*!< Sector Erase */
+  /*!< Select the FLASH: Chip Select low */
+  SPI_FLASH_CS_LOW();
+  /*!< Send Sector Erase instruction */
+  FlashSpiSendByte(SPI_FLASH_CMD_BE);
+  /*!< Send SectorAddr high nibble address byte */
+  FlashSpiSendByte((BlockAddr & 0xFF0000) >> 16);
+  /*!< Send SectorAddr medium nibble address byte */
+  FlashSpiSendByte((BlockAddr & 0xFF00) >> 8);
+  /*!< Send SectorAddr low nibble address byte */
+  FlashSpiSendByte(BlockAddr & 0xFF);
+  /*!< Deselect the FLASH: Chip Select high */
+  SPI_FLASH_CS_HIGH();
+
+  /*!< Wait the end of Flash writing */
+  FlashSpiWaitForWriteEnd();
+}
+
+/**
+  * @brief  Erases the specified FLASH sector. 4k
   * @param  SectorAddr: address of the sector to erase.
   * @retval None
   */
@@ -241,7 +269,7 @@ uint32_t FlashSpiReadID(void)
   SPI_FLASH_CS_LOW();
 
   /*!< Send "RDID " instruction */
-  FlashSpiSendByte(0x9F);
+  FlashSpiSendByte(SPI_FLASH_CMD_RDID);
 
   /*!< Read a byte from the FLASH */
   Temp0 = FlashSpiSendByte(SPI_FLASH_DUMMY_BYTE);

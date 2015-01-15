@@ -22,13 +22,19 @@
 #define MOTOR_PWM_L				TIM3->CCR2
 
 
-//UNKNOWN PERIPH YET
-#define SENSE_PROX1				GPIO_Pin_6
-#define SENSE_PROX2				GPIO_Pin_7
 #define SENSE_PROX3				GPIO_Pin_8
 #define SENSE_PROX4				GPIO_Pin_9
 #define SENSE_PROX_PORT			GPIOB
 
+#define ENCODER_R				TIM2
+#define ENCODER_PIN_R			GPIO_Pin_1
+#define ENCODER_R_AF_SRC		GPIO_PinSource1
+#define ENCODER_RCC_CLK_R		RCC_APB1ENR_TIM2EN
+#define ENCODER_L				TIM15
+#define ENCODER_PIN_L			GPIO_Pin_2
+#define ENCODER_L_AF_SRC		GPIO_PinSource2
+#define ENCODER_RCC_CLK_L		RCC_APB2ENR_TIM15EN
+#define ENCODER_PORT			GPIOA
 //ADC
 #define AN0					    GPIO_Pin_0
 #define AN1					    GPIO_Pin_1
@@ -66,6 +72,7 @@
 #define	DAC_PIN					GPIO_Pin_4
 #define DAC_PORT				GPIOA
 
+#if 0
 //SPI
 #define SPI_FLASH				SPI2
 #define SPI_FLASH_CS			GPIO_Pin_12
@@ -76,7 +83,18 @@
 #define SPI_FLASH_MOSI			GPIO_Pin_15
 #define SPI_FLASH_MOSI_AF_SRC	GPIO_PinSource15
 #define SPI_FLASH_PORT			GPIOB
-
+#else
+#define SPI_FLASH				SPI1
+#define SPI_FLASH_CS			GPIO_Pin_4
+#define SPI_FLASH_CLK			GPIO_Pin_5
+#define SPI_FLASH_SCLK_AF_SRC	GPIO_PinSource5
+#define SPI_FLASH_MISO			GPIO_Pin_6
+#define SPI_FLASH_MISO_AF_SRC	GPIO_PinSource6
+#define SPI_FLASH_MOSI			GPIO_Pin_7
+#define SPI_FLASH_MOSI_AF_SRC	GPIO_PinSource7
+#define SPI_FLASH_PORT			GPIOA
+#define SPI_FLASH_RCC_CLK		RCC_APB2Periph_SPI1
+#endif
 //USART
 #define USART_DEBUG				USART1
 #define USART_DEBUG_RCC_CLK		RCC_APB2Periph_USART1
@@ -117,6 +135,7 @@ int InitUsartDebug();
 int InitI2c();
 int InitSpi();
 int InitPwm();
+int InitEncoders();
 int InitAdc();
 int InitDac();;
 uint16_t* GetAdcData();

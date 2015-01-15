@@ -10,9 +10,15 @@
 
 #include "hardware_config.h"
 #define STOP_SPEED			500
-#define LOW_SPEED 			400				//(SystemCoreClock/PWM_FREQUENCy) = 2730 ~90% 273
+#define LOW_SPEED 			380			//(SystemCoreClock/PWM_FREQUENCy) = 2730 ~90% 273
 #define MID_SPEED			350
-#define HIGH_SPEED			300
+#define HIGH_SPEED			200
+#define NUMBER_OF_MOTORS	2
+
+typedef enum{
+	etMotorLeft = 0,
+	etMotorRight
+}MotorSide;
 
 typedef enum{
 	etSpeedStop			= 	STOP_SPEED	,
@@ -24,13 +30,14 @@ typedef enum{
 typedef enum
 {
 	etDirForward 				= 	0	,
-	etDirForwardRightFaster				,
-	etDirForwardLeftFaster				,
+	etDirStop,
 	etDirReverse						,
 	etDirCW								,
 	etDirCCW
 }Directions;
 
-void MotorsControlDrive( uint16_t speed, Directions dir );
+void MotorsControlDrive( double rightSpeed,double leftSpeed,Directions dir );
+double MotorControlGetDistance( MotorSide side );
+void MotorControlResetDistance();
 
 #endif /* MOTOR_CONTROL_H_ */
