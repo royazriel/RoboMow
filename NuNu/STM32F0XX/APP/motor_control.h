@@ -12,8 +12,11 @@
 #define STOP_SPEED			500
 #define LOW_SPEED 			380			//(SystemCoreClock/PWM_FREQUENCy) = 2730 ~90% 273
 #define MID_SPEED			350
-#define HIGH_SPEED			200
+#define HIGH_SPEED			150
 #define NUMBER_OF_MOTORS	2
+#define CONTROL_LOOP_RESOLUTION_MILI 50
+#define NORMALIZE_TO_SECOND			(CONTROL_LOOP_RESOLUTION_MILI/1000.0)
+#define MOTOR_CONTROL_GAIN			0.05f
 
 typedef enum{
 	etMotorLeft = 0,
@@ -30,7 +33,7 @@ typedef enum{
 typedef enum
 {
 	etDirForward 				= 	0	,
-	etDirStop,
+	etDirStop							,
 	etDirReverse						,
 	etDirCW								,
 	etDirCCW

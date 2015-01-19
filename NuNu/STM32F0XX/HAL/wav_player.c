@@ -6,22 +6,20 @@
  */
 
 #include "wav_player.h"
-#include "wav.h"
 #include "flash_spi.h"
 
 static WAVE_FormatTypeDef sWaveFormat;
 static ErrorCode sWaveFileStatus = Unvalid_RIFF_ID;
 static uint16_t sTIM6ARRValue = 6000;
-static uint32_t sWaveDataLength = 0;
+static int32_t sWaveDataLength = 0;
 static uint32_t sSpeechDataOffset = 0x00;
 static uint32_t sBufferSwapCounter = 0;
 static uint8_t sBuffer1[DMA_BUFFER_SIZE];
 static uint8_t sBuffer2[DMA_BUFFER_SIZE];
 static uint8_t sPlayingFileId;
 static uint8_t sPlayingBuffer = 0;
-static uint8_t sNextBufferLoaded = 1;
 
-//#define DMA_INTERRUPT
+#define DMA_INTERRUPT
 
 FileInfoRecord sFileListTable[MAX_FILES_IN_LIST_TABLE] = {
 	{ 0 	,"TEST.WAV"		,	0		,	100			},
@@ -40,9 +38,8 @@ void WavPlayerPlaySound( int fileId )
 
 	while (sWaveDataLength)
 	{
-		//FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-		memcpy( sBuffer2, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
-		//f_read (&F, Buffer2, _MAX_SS, &BytesRead);
+		FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
+		//memcpy( sBuffer2, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
 		sBufferSwapCounter++;
 		if (sWaveDataLength) sWaveDataLength -= DMA_BUFFER_SIZE;
 		if (sWaveDataLength < DMA_BUFFER_SIZE) sWaveDataLength = 0;
@@ -62,8 +59,8 @@ void WavPlayerPlaySound( int fileId )
 		DMA1_Channel3->CMAR = (uint32_t) & sBuffer2;
 		DMA1_Channel3->CCR = 0x2091;
 
-		//FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-		memcpy( sBuffer1, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
+		FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
+		//memcpy( sBuffer1, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
 		sBufferSwapCounter++;
 		//f_read (&F, Buffer1, _MAX_SS, &BytesRead);
 
@@ -101,39 +98,8 @@ void WavPlayerPlaySound( int fileId )
 	TIM_Cmd(TIM6, ENABLE);
 	sPlayingFileId = fileId;
 	sPlayingBuffer = 1;
-}
-
-void WavPlayerLoadNextBuffer()
-{
-	if( !sNextBufferLoaded )
-	{
-		uint8_t tmp;
-		if(sPlayingBuffer==1)
-		{
-			//prepare buf2
-			//FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-			memcpy( sBuffer2, (uint8_t *)(WAV_DATA_START + sFileListTable[sPlayingFileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
-			sBufferSwapCounter++;
-			if (sWaveDataLength) sWaveDataLength -= DMA_BUFFER_SIZE;
-			if (sWaveDataLength < DMA_BUFFER_SIZE) sWaveDataLength = 0;
-			tmp = (uint8_t) ((uint32_t)((sWaveFormat.DataSize - sWaveDataLength) * 100) / sWaveFormat.DataSize);
-			UsartPrintf("progress buf2 %d\r\n", tmp );
-
-		}
-		else
-		if(sPlayingBuffer==2)
-		{
-			//prepare buf2
-			//FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-			memcpy( sBuffer1, (uint8_t *)(WAV_DATA_START + sFileListTable[sPlayingFileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
-			sBufferSwapCounter++;
-			if (sWaveDataLength) sWaveDataLength -= DMA_BUFFER_SIZE;
-			if (sWaveDataLength < DMA_BUFFER_SIZE) sWaveDataLength = 0;
-			tmp = (uint8_t) ((uint32_t)((sWaveFormat.DataSize - sWaveDataLength) * 100) / sWaveFormat.DataSize);
-			UsartPrintf("progress buf1 %d\r\n", tmp );
-		}
-		sNextBufferLoaded = 1;
-	}
+	FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
+	sBufferSwapCounter++;
 }
 
 
@@ -147,13 +113,15 @@ void WavPlayerSwapBuffers()
 
 		DMA1_Channel3->CNDTR = 0x200;
 		DMA1_Channel3->CPAR = DAC_DHR8R1_Address;
-		DMA1_Channel3->CMAR = (uint32_t) & sBuffer2;
+		DMA1_Channel3->CMAR = (uint32_t) &sBuffer2;
 		DMA1_Channel3->CCR = 0x2091;
 		sPlayingBuffer = 2;
 		DMA1->IFCR = DMA1_FLAG_TC3;
+		FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + sFileListTable[sPlayingFileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
+		sBufferSwapCounter++;
+		sWaveDataLength-=DMA_BUFFER_SIZE;
 	}
 	else
-	if( sPlayingBuffer == 2 )
 	{
 		DMA1_Channel3->CCR = 0x0;
 		DMA1_Channel3->CNDTR = 0x200;
@@ -162,9 +130,13 @@ void WavPlayerSwapBuffers()
 		DMA1_Channel3->CCR = 0x2091;
 		sPlayingBuffer = 1;
 		DMA1->IFCR = DMA1_FLAG_TC3;
+		FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[sPlayingFileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
+		sBufferSwapCounter++;
+		sWaveDataLength-=DMA_BUFFER_SIZE;
 	}
 
-	sNextBufferLoaded = 0;
+	tmp = (uint8_t) ((uint32_t)((sWaveFormat.DataSize - sWaveDataLength) * 100) / sWaveFormat.DataSize);
+	UsartPrintf("progress %d  left %d\r\n", tmp, sWaveDataLength);
 
 	if( sWaveDataLength <=0 )
 	{
@@ -258,8 +230,8 @@ static ErrorCode WavPlayerWaveParsing( int fileId )
 	uint32_t temp = 0x00;
 	uint32_t extraformatbytes = 0;
 
-	//FlashSpiReadBuffer( sBuffer1, sFileListTable[fileId].offset,WAV_DATA_START);
-	memcpy( sBuffer1,veryshort_wav, 44);
+	FlashSpiReadBuffer( sBuffer1, sFileListTable[fileId].offset,WAV_DATA_START);
+	//memcpy( sBuffer1,veryshort_wav, 44);
 
 	/* Read chunkID, must be 'RIFF'  ----------------------------------------------*/
 	temp = ReadUnit(sBuffer1, 0, 4, BigEndian);
@@ -371,10 +343,9 @@ static ErrorCode WavPlayerWaveParsing( int fileId )
 	sWaveFormat.DataSize = ReadUnit(sBuffer1, sSpeechDataOffset, 4, LittleEndian);
 	sSpeechDataOffset += 4;
 	sBufferSwapCounter = 0;
-	//FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + s_fileListTable[fileId].offset,BUFFER_SIZE);
-	memcpy( sBuffer1,veryshort_wav + WAV_DATA_START, DMA_BUFFER_SIZE);
+	FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + sFileListTable[fileId].offset,DMA_BUFFER_SIZE);
+	//memcpy( sBuffer1,veryshort_wav + WAV_DATA_START, DMA_BUFFER_SIZE);
 	sBufferSwapCounter++;
-	sNextBufferLoaded = 0;
 	return(Valid_WAVE_File);
 }
 

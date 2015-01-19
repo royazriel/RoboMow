@@ -456,8 +456,9 @@ LIS3DH_NO_CLICK                        =               0x00
 
 //FIFO REGISTERS
 #define LIS3DH_FIFO_CTRL_REG			        0x2E
-#define LIS3DH_FIFO_SRC_REG			        0x2F
+#define LIS3DH_FIFO_SRC_REG			        	0x2F
 
+#define ONE_G_RESOLUTION 						8192.0f
 
 /* Exported macro ------------------------------------------------------------*/
 
@@ -523,7 +524,8 @@ status_t LIS3DH_GetTempRaw(i8_t* val);
 status_t LIS3DH_GetWHO_AM_I(u8_t* val);
 status_t LIS3DH_Get6DPosition(u8_t* val);
 status_t LIS3DH_Configure();
-status_t GetOneAxisTilt( double* result, TiltDirection* dir );
+status_t GetXAxisTilt( double* result, TiltDirection* dir );
+status_t GetYAxisTilt( double* result, TiltDirection* dir );
 //Generic
 // i.e. u8_t LIS3DH_ReadReg(u8_t Reg, u8_t* Data);
 // i.e. u8_t LIS3DH_WriteReg(u8_t Reg, u8_t Data);

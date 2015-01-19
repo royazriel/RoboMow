@@ -8,6 +8,12 @@
 #include "stm32f0xx_usart.h"
 #include "common.h"
 
+#define WHEEL_RADIUS				0.045f  //45mm
+#define WHEEL_PERIMETER				(2*PI*WHEEL_RADIUS)
+#define DISTANCE_BETWEEN_WHEELS 	0.21   //210mm
+#define PULSE_PER_REVOLUTION		2400
+#define PULSE_PER_METER				(2400/WHEEL_PERIMETER)
+
 //PWM
 #define PWM_FREQUENCY			17570
 #define MOTOR_DRV_R				GPIO_Pin_4
@@ -65,14 +71,13 @@
 
 //DIGITAL INPUT
 #define USER_PB1				GPIO_Pin_0
-#define USER_PB2				GPIO_Pin_1
+#define USER_PB2				GPIO_Pin_3
 #define USER_PB_PORT			GPIOA
 
 //DAC
 #define	DAC_PIN					GPIO_Pin_4
 #define DAC_PORT				GPIOA
 
-#if 0
 //SPI
 #define SPI_FLASH				SPI2
 #define SPI_FLASH_CS			GPIO_Pin_12
@@ -83,18 +88,18 @@
 #define SPI_FLASH_MOSI			GPIO_Pin_15
 #define SPI_FLASH_MOSI_AF_SRC	GPIO_PinSource15
 #define SPI_FLASH_PORT			GPIOB
-#else
-#define SPI_FLASH				SPI1
-#define SPI_FLASH_CS			GPIO_Pin_4
-#define SPI_FLASH_CLK			GPIO_Pin_5
-#define SPI_FLASH_SCLK_AF_SRC	GPIO_PinSource5
-#define SPI_FLASH_MISO			GPIO_Pin_6
-#define SPI_FLASH_MISO_AF_SRC	GPIO_PinSource6
-#define SPI_FLASH_MOSI			GPIO_Pin_7
-#define SPI_FLASH_MOSI_AF_SRC	GPIO_PinSource7
-#define SPI_FLASH_PORT			GPIOA
-#define SPI_FLASH_RCC_CLK		RCC_APB2Periph_SPI1
-#endif
+
+#define SPI_OTHER				SPI1
+#define SPI_OTHER_CS			GPIO_Pin_2
+#define SPI_OTHER_CLK			GPIO_Pin_3
+#define SPI_OTHER_SCLK_AF_SRC	GPIO_PinSource3
+#define SPI_OTHER_MISO			GPIO_Pin_4
+#define SPI_OTHER_MISO_AF_SRC	GPIO_PinSource4
+#define SPI_OTHER_MOSI			GPIO_Pin_5
+#define SPI_OTHER_MOSI_AF_SRC	GPIO_PinSource5
+#define SPI_OTHER_PORT			GPIOB
+
+
 //USART
 #define USART_DEBUG				USART1
 #define USART_DEBUG_RCC_CLK		RCC_APB2Periph_USART1

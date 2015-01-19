@@ -1818,7 +1818,7 @@ status_t LIS3DH_Configure()
 	return response;
 }
 
-status_t GetOneAxisTilt( double* result, TiltDirection* dir )
+status_t GetXAxisTilt( double* result, TiltDirection* dir )
 {
 	AxesRaw_t data;
 	status_t response = MEMS_SUCCESS;
@@ -1831,6 +1831,24 @@ status_t GetOneAxisTilt( double* result, TiltDirection* dir )
 		*dir = data.AXIS_Y < 0 ?  etTiltUp : etTiltDown;
 		double deg = data.AXIS_X / ONE_G_RESOLUTION;
 		deg = asin(deg) / PI * PI_IN_DEG ;
+		*result = deg;
+	}
+	return response;
+}
+
+status_t GetYAxisTilt( double* result, TiltDirection* dir )
+{
+	AxesRaw_t data;
+	status_t response = MEMS_SUCCESS;
+
+	//get Acceleration Raw data
+	response = LIS3DH_GetAccAxesRaw(&data);
+	if(response== MEMS_SUCCESS)
+	{
+		//print data values
+		double deg = data.AXIS_Y / ONE_G_RESOLUTION;
+		deg = asin(deg) / PI * PI_IN_DEG ;
+		*dir = deg < 0 ?  etTiltUp : etTiltDown;
 		*result = deg;
 	}
 	return response;

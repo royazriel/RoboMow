@@ -143,8 +143,9 @@ void ADC1_COMP_IRQHandler(void)
 
 DMA1_Channel2_3_IRQHandler(void)
 {
-	//WavPlayerSwapBuffers();
-	//DMA_ClearITPendingBit(DMA1_FLAG_TC3);
+	DMA_ITConfig(DMA1_Channel3, DMA_IT_TC, DISABLE);
+	WavPlayerSwapBuffers();
+	DMA_ITConfig(DMA1_Channel3, DMA_IT_TC, ENABLE);
 }
 /******************************************************************************/
 /*                 STM32F0xx Peripherals Interrupt Handlers                   */

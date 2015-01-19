@@ -17,7 +17,6 @@ void MotorsControlDrive( double rightSpeed,double leftSpeed,Directions dir )
 	uint16_t encoderVal[NUMBER_OF_MOTORS];
 	uint16_t newPwmVal;
 
-	UsartPrintf("l_speed: %2.2f r_speed: %2.2f ", leftSpeed,rightSpeed);
 	requestedSpeedInPulses[etMotorRight]=rightSpeed*PULSE_PER_METER;
 	requestedSpeedInPulses[etMotorLeft]=leftSpeed*PULSE_PER_METER;
 
@@ -53,6 +52,8 @@ void MotorsControlDrive( double rightSpeed,double leftSpeed,Directions dir )
 		lastTime = GetMiliSecondCount();
 		MOTOR_PWM_R = LOW_SPEED;
 		MOTOR_PWM_L = LOW_SPEED;
+		TIM_SetCounter (ENCODER_R, 0);
+		TIM_SetCounter (ENCODER_L, 0);
 	}
 
 	if(GetMiliSecondCount()-lastTime > CONTROL_LOOP_RESOLUTION_MILI)
@@ -63,13 +64,9 @@ void MotorsControlDrive( double rightSpeed,double leftSpeed,Directions dir )
 		speedErrorInPulses[etMotorRight] = ((double)encoderVal[etMotorRight]/(NORMALIZE_TO_SECOND)) - requestedSpeedInPulses[etMotorRight];
 		lastTime= GetMiliSecondCount();
 
-		newPwmVal = LOW_SPEED+(speedErrorInPulses[etMotorRight] * MOTOR_CONTROL_GAIN);
-		if(newPwmVal < 200) newPwmVal = 200;
-		if(newPwmVal < STOP_SPEED && newPwmVal > 0)
-		{
-			MOTOR_PWM_R = newPwmVal;
-		}
-
+		newPwmVal = MOTOR_PWM_R/*LOW_SPEED*/+(speedErrorInPulses[etMotorRight] * MOTOR_CONTROL_GAIN);
+		if(newPwmVal < HIGH_SPEED) newPwmVal = HIGH_SPEED;
+		MOTOR_PWM_R = newPwmVal;
 
 		encoderVal[etMotorLeft] = TIM_GetCounter(ENCODER_L);
 		TIM_SetCounter (ENCODER_L, 0);
@@ -77,14 +74,15 @@ void MotorsControlDrive( double rightSpeed,double leftSpeed,Directions dir )
 		speedErrorInPulses[etMotorLeft] = ((double)encoderVal[etMotorLeft]/(NORMALIZE_TO_SECOND)) - requestedSpeedInPulses[etMotorLeft];
 		lastTime= GetMiliSecondCount();
 
-		newPwmVal = LOW_SPEED+(speedErrorInPulses[etMotorLeft] * MOTOR_CONTROL_GAIN);
-		if(newPwmVal < 200) newPwmVal = 200;
-		if(newPwmVal < STOP_SPEED && newPwmVal > 0)
-		{
-			MOTOR_PWM_L = newPwmVal;
-		}
+		newPwmVal = MOTOR_PWM_L/*LOW_SPEED*/+(speedErrorInPulses[etMotorLeft] * MOTOR_CONTROL_GAIN);
+		if(newPwmVal < HIGH_SPEED) newPwmVal = HIGH_SPEED;
 
-		UsartPrintf("ERR_L: %d PWM_L %d  | ERR_R: %d PWM_R %d\r\n",speedErrorInPulses[etMotorLeft], MOTOR_PWM_L, speedErrorInPulses[etMotorRight],MOTOR_PWM_R);
+		MOTOR_PWM_L = newPwmVal;
+
+		UsartPrintf("l_speed: %2.2f r_speed: %2.2f ", leftSpeed,rightSpeed);
+		UsartPrintf("ERR_L: %d PWM_L %d  | ERR_R: %d PWM_R %d | DIS_L: %f  DIS_R: %f\r\n",speedErrorInPulses[etMotorLeft], MOTOR_PWM_L,
+																							speedErrorInPulses[etMotorRight],MOTOR_PWM_R,
+																							MotorControlGetDistance(etMotorLeft),MotorControlGetDistance(etMotorRight));
 	}
 EXIT:{}
 }

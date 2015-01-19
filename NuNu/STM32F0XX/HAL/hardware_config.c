@@ -224,7 +224,8 @@ int InitSpi()
 	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_MISO_AF_SRC, GPIO_AF_0 );
 	GPIO_PinAFConfig( SPI_FLASH_PORT, SPI_FLASH_MOSI_AF_SRC, GPIO_AF_0 );
 
-	RCC_APB2PeriphClockCmd( SPI_FLASH_RCC_CLK, ENABLE);
+	RCC_APB1PeriphClockCmd( RCC_APB1Periph_SPI2, ENABLE);
+	//RCC_APB2PeriphClockCmd( RCC_APB2Periph_SPI1, ENABLE);
 
 #if 0
 	/* (1) Select AF mode (10) on PA4, PA5, PA6, PA7 */
@@ -249,7 +250,7 @@ int InitSpi()
 	SPI_InitStructure.SPI_CPOL = SPI_CPOL_Low;	 //
 	SPI_InitStructure.SPI_CPHA = SPI_CPHA_1Edge;
 	SPI_InitStructure.SPI_NSS = SPI_NSS_Soft;
-	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_2;
+	SPI_InitStructure.SPI_BaudRatePrescaler = SPI_BaudRatePrescaler_8;
 	SPI_InitStructure.SPI_FirstBit = SPI_FirstBit_MSB;
 	SPI_InitStructure.SPI_CRCPolynomial = 7;
 
@@ -438,12 +439,12 @@ int InitDac()
 	RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
 
 	/* Configure DAC Channel1 as output */
-	GPIO_InitStructure.GPIO_Pin = GPIO_Pin_4;
+	GPIO_InitStructure.GPIO_Pin = DAC_PIN;
 	GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL ;
 	/* Must be analogic (but works with other config which they have no effect) */
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AN;
-	GPIO_Init(GPIOA, &GPIO_InitStructure);
+	GPIO_Init(DAC_PORT, &GPIO_InitStructure);
 
 	/* DAC deinitialize */
 	DAC_DeInit();

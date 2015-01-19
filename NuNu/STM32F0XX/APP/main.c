@@ -11,6 +11,7 @@
 #include "lis3dh_driver.h"
 #include "motor_control.h"
 #include "flash_spi.h"
+#include "state_machine.h"
 // ----------------------------------------------------------------------------
 //
 // STM32F0 empty sample (trace via ITM).
@@ -31,15 +32,11 @@
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
-extern void StateMachineHandleStates();
-
-
  void flashUnitTest()
  {
 	 uint8_t string1[10] = "hello\0";
 	 uint8_t string2[10] = "bye\0";
 	 uint8_t string3[10] = {0,};
-
 
 	 FlashSpiEraseSector(0);
 	 FlashSpiWriteBuffer(string1, 0, 6);
@@ -53,11 +50,12 @@ extern void StateMachineHandleStates();
 		 UsartPrintf("erasing writing reading to first sector success\r\n");
 	 }
 
-	 FlashSpiEraseSector(2047); //erase last sector
-	 FlashSpiWriteBuffer(string2, 2047* 256, 4);
+
+	 FlashSpiEraseSector(SPI_FLASH_SECTOR_SIZE* 127); //erase last sector
+	 FlashSpiWriteBuffer(string2, 127*SPI_FLASH_SECTOR_SIZE, 4);
 	 UsartPrintf(string2);
 	 UsartPrintf("\r\n");
-	 FlashSpiReadBuffer(string3,2047*256,4);
+	 FlashSpiReadBuffer(string3,127*SPI_FLASH_SECTOR_SIZE,4);
 	 UsartPrintf(string3);
 	 UsartPrintf("\r\n");
 	 if(strncmp(string2,string3,4)==0)
@@ -69,37 +67,56 @@ extern void StateMachineHandleStates();
 int
 main(int argc, char* argv[])
 {
-	uint8_t string[10] = {0,};
+	uint8_t string[SPI_FLASH_SECTOR_SIZE] = {0,};
+	int count = 0;
 
 	InitGpio();
 	InitSystemTick();
 	InitUsartDebug();
 	InitI2c();
-	//InitSpi();
+	InitSpi();
 	InitPwm();
 	InitEncoders();
 	InitAdc();
 	InitDac();
 
 	UsartPrintf("\033cNUNU Project!!\r\n");
-	LIS3DH_Configure();
-
-	while(1)
-	{
-		StateMachineHandleStates();
-	}
-
+//	LIS3DH_Configure();
+//
 //	while(1)
 //	{
-//		if(PB1_STATE)
-//		{
-//			UsartPrintf("flashId: 0x%x\r\n",FlashSpiReadID());
-//			FlashSpiWriteBuffer("aaaaa",1000,6);
-//			FlashSpiReadBuffer(string,1000,6);
-//			flashUnitTest();
-//			usleep(500000);
-//		}
+//		StateMachineHandleStates();
 //	}
+	while(1)
+	{
+		if(PB1_STATE)
+		{
+			WavPlayerLoad(0);
+			WavPlayerPlaySound(0);
+//			FlashSpiReadBuffer(string,0,SPI_FLASH_SECTOR_SIZE);
+//			for(int i=0;i<SPI_FLASH_SECTOR_SIZE; i++)
+//			{
+//				UsartPrintf("%x ",string[i]);
+//			}
+//			UsartPrintf("\r\n");
+//			UsartPrintf("before\r\n");
+//			WavPlayerPlaySound(0);
+//			UsartPrintf("after\r\n");
+			usleep(500000);
+//			count++;
+//			switch(count)
+//			{
+//				case 2:
+//					flashUnitTest();
+//					break;
+//				case 1:
+//					FlashSpiReadBuffer(string,0,6);
+//					UsartPrintf(string);
+//					UsartPrintf("\r\n");
+//					break;
+//			}
+		}
+	}
 
 
 

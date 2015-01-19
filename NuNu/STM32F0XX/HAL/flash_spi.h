@@ -26,6 +26,9 @@
 #define 	SPI_FLASH_S25FL204K_ID   	0x14013
 #define 	SPI_FLASH_SPI_PAGESIZE   	0x100
 #define 	SPI_FLASH_WIP_FLAG   		0x01
+
+#define		SPI_FLASH_SECTOR_SIZE		4096
+#define		SPI_FLASH_BLOCK_SIZE		4096*16
 /*
 – Page program time: 1.5 ms typical
 – Sector erase time (4 kB): 50 ms typical
