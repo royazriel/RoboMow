@@ -19,81 +19,42 @@ static uint8_t sBuffer2[DMA_BUFFER_SIZE];
 static uint8_t sPlayingFileId;
 static uint8_t sPlayingBuffer = 0;
 
-#define DMA_INTERRUPT
 
 FileInfoRecord sFileListTable[MAX_FILES_IN_LIST_TABLE] = {
-	{ 0 	,"TEST.WAV"		,	0		,	100			},
-	{ 1 	,"TEST1.WAV"	,	200		,	100			}
+		{  0, "hasta-la-vista-baby.wav"		  ,	0		,17826	 },
+		{  1, "ill-be-back.wav"				  ,	17920	,8565    },
+		{  2, "its-not-that-easy.wav"		  ,	26624	,9768    },
+		{  3, "its-your-sweetheart-again.wav" ,	36864	,15640   },
+		{  4, "let-me-out-of-here-1.wav"	  ,	52736	,9214    },
+		{  5, "nice-work.wav"				  ,	61952	,5744    },
+		{  6, "no-problemo.wav"				  ,	68096	,7191    },
+		{  7, "oh-yeah-everything-is-fine.wav", 75776	,14286   },
+		{  8, "okay-bye.wav"				  , 90112	,8146    },
+		{  9, "R2D2a.wav"					  , 98304	,9662    },
+		{ 10, "that-feels-really-powerful.wav", 108032	,15086   },
+		{ 11, "tubbyuhoh.wav"				  , 123392	,15818   },
+		{ 12, "werent-you-listening.wav"	  , 139264	,14019   },
+		{ 13, "wow-1.wav"					  , 153600	,11883   },
+		{ 14, "yes-3.wav"					  , 165888	,7612    },
+		{ 15, "you-can-do-it.wav"			  , 173568	,6011    },
+		{ 16, "you-got-it-1.wav"			  , 179712	,5744    },
+		{ 17, "youll-see-very-soon.wav"		  , 185856	,20425   },
+		{ 18, "youre-almost-there.wav"		  , 206336	,12417   },
+		{ 19, "youre-on-the-right-track.wav"  , 219136	,11883   }
 };
+
 
 static ErrorCode WavPlayerWaveParsing( int fileid );
 
-#ifndef DMA_INTERRUPT
 void WavPlayerPlaySound( int fileId )
 {
-	uint8_t tmp;
-
-	/* Start TIM6 */
-	TIM_Cmd(TIM6, ENABLE);
-
-	while (sWaveDataLength)
+	UsartPrintf("playing file: %-40s file size: %d\r\n", sFileListTable[fileId].name,sFileListTable[sPlayingFileId].size );
+	if( WavPlayerLoad(fileId) != Valid_WAVE_File)
 	{
-		FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-		//memcpy( sBuffer2, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
-		sBufferSwapCounter++;
-		if (sWaveDataLength) sWaveDataLength -= DMA_BUFFER_SIZE;
-		if (sWaveDataLength < DMA_BUFFER_SIZE) sWaveDataLength = 0;
-
-		while (DMA_GetFlagStatus(DMA1_FLAG_TC3) == RESET)
-		{
-		  tmp = (uint8_t) ((uint32_t)((sWaveFormat.DataSize - sWaveDataLength) * 100) / sWaveFormat.DataSize);
-
-		  //UsartPrintf("progress buf2 %d\r\n", tmp );
-		}
-
-		DMA1->IFCR = DMA1_FLAG_TC3;
-		DMA1_Channel3->CCR = 0x0;
-
-		DMA1_Channel3->CNDTR = 0x200;
-		DMA1_Channel3->CPAR = DAC_DHR8R1_Address;
-		DMA1_Channel3->CMAR = (uint32_t) & sBuffer2;
-		DMA1_Channel3->CCR = 0x2091;
-
-		FlashSpiReadBuffer( sBuffer1, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
-		//memcpy( sBuffer1, (uint8_t *)(WAV_DATA_START + veryshort_wav + (sBufferSwapCounter * DMA_BUFFER_SIZE)),DMA_BUFFER_SIZE);
-		sBufferSwapCounter++;
-		//f_read (&F, Buffer1, _MAX_SS, &BytesRead);
-
-		if (sWaveDataLength) sWaveDataLength -= DMA_BUFFER_SIZE;
-		if (sWaveDataLength < DMA_BUFFER_SIZE) sWaveDataLength = 0;
-
-		while (DMA_GetFlagStatus(DMA1_FLAG_TC3) == RESET)
-		{
-			tmp = (uint8_t) ((uint32_t)((sWaveFormat.DataSize - sWaveDataLength) * 100) / sWaveFormat.DataSize);
-
-			//UsartPrintf("progress buf1 %d\r\n", tmp );
-		}
-
-		DMA1->IFCR = DMA1_FLAG_TC3;
-		DMA1_Channel3->CCR = 0x0;
-
-		DMA1_Channel3->CNDTR = 0x200;
-		DMA1_Channel3->CPAR = DAC_DHR8R1_Address;
-		DMA1_Channel3->CMAR = (uint32_t) &sBuffer1;
-		DMA1_Channel3->CCR = 0x2091;
+		UsartPrintf("Not a valid wav file\r\n");
+		return;
 	}
 
-	DMA1_Channel3->CCR = 0x0;
-
-	/* Disable TIM6 */
-	TIM_Cmd(TIM6, DISABLE);
-	sWaveDataLength = 0;
-
-}
-#else
-
-void WavPlayerPlaySound( int fileId )
-{
 	/* Start TIM6 */
 	TIM_Cmd(TIM6, ENABLE);
 	sPlayingFileId = fileId;
@@ -101,7 +62,6 @@ void WavPlayerPlaySound( int fileId )
 	FlashSpiReadBuffer( sBuffer2, WAV_DATA_START + sFileListTable[fileId].offset + (sBufferSwapCounter * DMA_BUFFER_SIZE),DMA_BUFFER_SIZE);
 	sBufferSwapCounter++;
 }
-
 
 void WavPlayerSwapBuffers()
 {
@@ -135,20 +95,14 @@ void WavPlayerSwapBuffers()
 		sWaveDataLength-=DMA_BUFFER_SIZE;
 	}
 
-	tmp = (uint8_t) ((uint32_t)((sWaveFormat.DataSize - sWaveDataLength) * 100) / sWaveFormat.DataSize);
-	UsartPrintf("progress %d  left %d\r\n", tmp, sWaveDataLength);
-
 	if( sWaveDataLength <=0 )
 	{
 		DMA1_Channel3->CCR = 0x0;
 		/* Disable TIM6 */
 		TIM_Cmd(TIM6, DISABLE);
 		sWaveDataLength = 0;
-		UsartPrintf("reached the end of file\r\n", tmp );
 	}
-
 }
-#endif
 
 ErrorCode WavPlayerLoad( int fileId )
 {
@@ -178,7 +132,6 @@ ErrorCode WavPlayerLoad( int fileId )
 	DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
 	DMA_Init(DMA1_Channel3, &DMA_InitStructure);
 
-#ifdef DMA_INTERRUPT
 	/* Enable DMA1 Channel1 Transfer Complete interrupt */
 	DMA_ITConfig(DMA1_Channel3, DMA_IT_TC, ENABLE);
 
@@ -187,7 +140,6 @@ ErrorCode WavPlayerLoad( int fileId )
 	NVIC_InitStructure.NVIC_IRQChannelPriority = 0;
 	NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
 	NVIC_Init(&NVIC_InitStructure);
-#endif
 
 	/* Enable DMA1 Channel3 */
 	DMA_Cmd(DMA1_Channel3, ENABLE);
@@ -279,7 +231,6 @@ static ErrorCode WavPlayerWaveParsing( int fileId )
 	/* Read the Sample Rate ----------------------------------------------------*/
 	sWaveFormat.SampleRate = ReadUnit(sBuffer1, 24, 4, LittleEndian);
 	/* Update the OCA value according to the .WAV file Sample Rate */
-	UsartPrintf("speed %d\r\n", sWaveFormat.SampleRate);
 	switch (sWaveFormat.SampleRate)
 	{
 	case SAMPLE_RATE_8000 :

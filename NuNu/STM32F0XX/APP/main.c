@@ -32,38 +32,6 @@
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
- void flashUnitTest()
- {
-	 uint8_t string1[10] = "hello\0";
-	 uint8_t string2[10] = "bye\0";
-	 uint8_t string3[10] = {0,};
-
-	 FlashSpiEraseSector(0);
-	 FlashSpiWriteBuffer(string1, 0, 6);
-	 UsartPrintf(string1);
-	 UsartPrintf("\r\n");
-	 FlashSpiReadBuffer(string3,0,6);
-	 UsartPrintf(string3);
-	 UsartPrintf("\r\n");
-	 if(strncmp(string1,string3,6)==0)
-	 {
-		 UsartPrintf("erasing writing reading to first sector success\r\n");
-	 }
-
-
-	 FlashSpiEraseSector(SPI_FLASH_SECTOR_SIZE* 127); //erase last sector
-	 FlashSpiWriteBuffer(string2, 127*SPI_FLASH_SECTOR_SIZE, 4);
-	 UsartPrintf(string2);
-	 UsartPrintf("\r\n");
-	 FlashSpiReadBuffer(string3,127*SPI_FLASH_SECTOR_SIZE,4);
-	 UsartPrintf(string3);
-	 UsartPrintf("\r\n");
-	 if(strncmp(string2,string3,4)==0)
-	 {
-		 UsartPrintf("erasing writing reading to last sector success\r\n");
-	 }
- }
-
 int
 main(int argc, char* argv[])
 {
@@ -81,40 +49,14 @@ main(int argc, char* argv[])
 	InitDac();
 
 	UsartPrintf("\033cNUNU Project!!\r\n");
-//	LIS3DH_Configure();
-//
-//	while(1)
-//	{
-//		StateMachineHandleStates();
-//	}
 	while(1)
 	{
 		if(PB1_STATE)
 		{
-			WavPlayerLoad(0);
-			WavPlayerPlaySound(0);
-//			FlashSpiReadBuffer(string,0,SPI_FLASH_SECTOR_SIZE);
-//			for(int i=0;i<SPI_FLASH_SECTOR_SIZE; i++)
-//			{
-//				UsartPrintf("%x ",string[i]);
-//			}
-//			UsartPrintf("\r\n");
-//			UsartPrintf("before\r\n");
-//			WavPlayerPlaySound(0);
-//			UsartPrintf("after\r\n");
+			WavPlayerPlaySound(count);
+			count++;
+			if(count==20)count =0;
 			usleep(500000);
-//			count++;
-//			switch(count)
-//			{
-//				case 2:
-//					flashUnitTest();
-//					break;
-//				case 1:
-//					FlashSpiReadBuffer(string,0,6);
-//					UsartPrintf(string);
-//					UsartPrintf("\r\n");
-//					break;
-//			}
 		}
 	}
 

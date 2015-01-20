@@ -36,7 +36,7 @@ Finally, the data chunk contains the sample data:
 typedef struct __FileInfoRecord
 {
 	uint8_t 	id;
-	char		name[20];
+	char		name[40];
 	uint32_t	offset;
 	uint32_t	size;
 }FileInfoRecord;
