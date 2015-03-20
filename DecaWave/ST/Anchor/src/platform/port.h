@@ -97,6 +97,9 @@ typedef enum
 #define USER_BUTTON					GPIO_Pin_0
 #define USER_BUTTON_PORT            GPIOA
 
+#define ANCHOR_ID_SELECTION			GPIO_Pin_2
+#define ANCHOR_ID_SELECTION_PORT    GPIOA
+
 #define USART1_TX_GPIO				GPIO_Pin_9
 #define USART1_RX_GPIO				GPIO_Pin_10
 #define USART1_PORT		            GPIOA

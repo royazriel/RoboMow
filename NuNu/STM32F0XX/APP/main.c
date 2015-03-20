@@ -11,7 +11,11 @@
 #include "lis3dh_driver.h"
 #include "motor_control.h"
 #include "flash_spi.h"
+#include "wav_player.h"
 #include "state_machine.h"
+#include "tsl_types.h"
+#include "tsl_user.h"
+
 // ----------------------------------------------------------------------------
 //
 // STM32F0 empty sample (trace via ITM).
@@ -32,11 +36,24 @@
 #pragma GCC diagnostic ignored "-Wmissing-declarations"
 #pragma GCC diagnostic ignored "-Wreturn-type"
 
+
+void MyLinRots_ErrorStateProcess(void)
+{
+  /* Add here your own processing when a sensor is in Error state */
+  TSL_linrot_SetStateOff();
+}
+
+void MyLinRots_OffStateProcess(void)
+{
+  /* Add here your own processing when a sensor is in Off state */
+}
+
 int
 main(int argc, char* argv[])
 {
-	uint8_t string[SPI_FLASH_SECTOR_SIZE] = {0,};
+	//uint8_t string[SPI_FLASH_SECTOR_SIZE] = {0,};
 	int count = 0;
+	float temp, press;
 
 	InitGpio();
 	InitSystemTick();
@@ -48,11 +65,37 @@ main(int argc, char* argv[])
 	InitAdc();
 	InitDac();
 
+
+
+	 /* Init STMTouch driver */
+	//TSL_user_Init();
+
 	UsartPrintf("\033cNUNU Project!!\r\n");
+	UsartPrintf("starting pressure sensor\r\n");
+	LPS25H_Init();
+	UsartPrintf("id of pressure sensor is: 0x%x\r\n",LPS25H_ReadID());
+
 	while(1)
 	{
 		if(PB1_STATE)
 		{
+			LPS25H_GetPressure(&press);
+			LPS25H_GetTemperature(&temp);
+			UsartPrintf("pressure %2.2f temp %2.2f\r\n", press,temp);
+
+#if 0
+		    if (TSL_user_Action() == TSL_STATUS_OK)
+		    {
+
+				if ((MyLinRots[0].p_Data->StateId == TSL_STATEID_DETECT) ||
+					(MyLinRots[0].p_Data->StateId == TSL_STATEID_DEB_RELEASE_DETECT))
+				{
+				  if (MyLinRots[0].p_Data->Position > 0)
+				  {
+				  }
+				}
+		    }
+#endif
 			WavPlayerPlaySound(count);
 			count++;
 			if(count==20)count =0;

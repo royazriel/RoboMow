@@ -18,7 +18,8 @@
 #include "deca_device_api.h"
 #include "compiler.h"
 #include "spiDriver.h"
-#include "udpClient.h"
+//#include "udpClient.h"
+#include "AfUnix.h"
 #include "instance.h"
 
 #include "deca_types.h"
@@ -190,17 +191,15 @@ uint64 forwardingAddress[1] =
 //
 void addressconfigure(void)
 {
-    instanceAddressConfig_t ipc ;
+    instanceAddressConfig_t ipc;
 
     ipc.forwardToFRAddress = forwardingAddress[0];
     ipc.anchorAddress = anchorAddressList[instance_anchaddr];
     ipc.anchorAddressList = anchorAddressList;
     ipc.anchorListSize = ANCHOR_LIST_SIZE ;
     ipc.anchorPollMask = 0x3;              // anchor poll mask
-
     ipc.sendReport = 1 ;  //1 => anchor sends TOF report to tag
     //ipc.sendReport = 2 ;  //2 => anchor sends TOF report to listener
-
     instancesetaddresses(&ipc);
 }
 #endif
@@ -261,9 +260,10 @@ uint32 inittestapplication()
 #if (DR_DISCOVERY == 0)
 	if(instance_mode == TAG)
 	{
-		if( UdpclinetConnect((const char *)ipAddress, port))
+		//if( UdpclinetConnect((const char *)ipAddress, port))
+		if( AfUnixClinetConnect())
 		{
-			PINFO("udp client failed to init socket");
+			PINFO("AfUnixClientConnect failed to init socket");
 		}
 	}
 #else
@@ -583,14 +583,19 @@ int main(int argc, char *argv[])
 	            GPIOWrite( DW_WAKEUP_PIN, gpioVal );
 	            lastReportTime=getmstime();
 	            uint64 id = instance_get_anchaddr();
-	            (*(uint32*)buffer)= (uint32)id;
-	            swap4Bytes(buffer);
-	            (*(float*)(buffer+4)) = (float)range_result;
-	            swap4Bytes(buffer+4);
+	            (*(uint32*) buffer)= MAGIC_NUMBER;
+	            (*(uint32*)(buffer + 4))= (uint32)id;
+	            (*(float* )(buffer + 8)) = (float)range_result;
 #if (DR_DISCOVERY == 0)
 	            if( instance_mode == TAG )
 	            {
-	            	UdpClinetSendReportTOF(buffer, 8);
+	            	//UdpClinetSendReportTOF(buffer, 8);
+	            	if(AfUnixClinetSendReportTOF(buffer, 12))
+	            	{
+	            		sleep(1);
+	            		//socket probably disconnected
+	            		AfUnixClinetConnect();
+	            	}
 	            }
 #else
 	            if( instance_mode == ANCHOR )

@@ -27,14 +27,14 @@
 #include "lis3dh_driver.h"
 #include "hardware_config.h"
 #include "common.h"
+#include "i2c.h"
 
 /* Private typedef -----------------------------------------------------------*/
 /* Private define ------------------------------------------------------------*/
 /* Private macro -------------------------------------------------------------*/
 /* Private variables ---------------------------------------------------------*/
-__IO uint32_t  LIS3DH_Timeout = LIS3DH_LONG_TIMEOUT;
 /* Private function prototypes -----------------------------------------------*/
-
+#if 0
 /*******************************************************************************
 * Function Name		: LIS3DH_ReadReg
 * Description		: Generic Reading function. It must be fullfilled with either
@@ -200,6 +200,32 @@ u8_t LIS3DH_WriteReg(u8_t WriteAddr, u8_t Data) {
 
 	return MEMS_SUCCESS;
 }
+#endif
+/*******************************************************************************
+* Function Name		: LIS3DH_ReadReg
+* Description		: Generic Reading function. It must be fullfilled with either
+*			: I2C or SPI reading functions
+* Input			: Register Address
+* Output		: Data REad
+* Return		: None
+*******************************************************************************/
+u8_t LIS3DH_ReadReg(u8_t Reg, u8_t* Data)
+{
+	return I2cReadReg( LIS3DH_MEMS_I2C_ADDRESS, Reg , Data, 1);
+}
+
+/*******************************************************************************
+* Function Name		: LIS3DH_WriteReg
+* Description		: Generic Writing function. It must be fullfilled with either
+*			: I2C or SPI writing function
+* Input			: Register Address, Data to be written
+* Output		: None
+* Return		: None
+*******************************************************************************/
+u8_t LIS3DH_WriteReg(u8_t WriteAddr, u8_t* Data)
+{
+	 return i2cWrite( LIS3DH_MEMS_I2C_ADDRESS, WriteAddr , Data, 1);
+}
 
 
 /* Private functions ---------------------------------------------------------*/
@@ -358,7 +384,7 @@ status_t LIS3DH_SetODR(LIS3DH_ODR_t ov){
   value &= 0x0f;
   value |= ov<<LIS3DH_ODR_BIT;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG1, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG1, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -383,7 +409,7 @@ status_t LIS3DH_SetTemperature(State_t state){
   value &= 0xBF;
   value |= state<<LIS3DH_TEMP_EN;
   
-  if( !LIS3DH_WriteReg(LIS3DH_TEMP_CFG_REG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_TEMP_CFG_REG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -406,7 +432,7 @@ status_t LIS3DH_SetADCAux(State_t state){
   value &= 0x7F;
   value |= state<<LIS3DH_ADC_PD;
   
-  if( !LIS3DH_WriteReg(LIS3DH_TEMP_CFG_REG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_TEMP_CFG_REG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -521,10 +547,10 @@ status_t LIS3DH_SetMode(LIS3DH_Mode_t md) {
     return MEMS_ERROR;
   }
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG1, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG1, &value) )
     return MEMS_ERROR;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, value2) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, &value2) )
     return MEMS_ERROR;  
   
   return MEMS_SUCCESS;
@@ -547,7 +573,7 @@ status_t LIS3DH_SetAxis(LIS3DH_Axis_t axis) {
   value &= 0xF8;
   value |= (0x07 & axis);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG1, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG1, &value) )
     return MEMS_ERROR;   
   
   return MEMS_SUCCESS;
@@ -570,7 +596,7 @@ status_t LIS3DH_SetFullScale(LIS3DH_Fullscale_t fs) {
   value &= 0xCF;	
   value |= (fs<<LIS3DH_FS);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -593,7 +619,7 @@ status_t LIS3DH_SetBDU(State_t bdu) {
   value &= 0x7F;
   value |= (bdu<<LIS3DH_BDU);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -616,7 +642,7 @@ status_t LIS3DH_SetBLE(LIS3DH_Endianess_t ble) {
   value &= 0xBF;	
   value |= (ble<<LIS3DH_BLE);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -639,7 +665,7 @@ status_t LIS3DH_SetSelfTest(LIS3DH_SelfTest_t st) {
   value &= 0xF9;
   value |= (st<<LIS3DH_ST);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -662,7 +688,7 @@ status_t LIS3DH_HPFClickEnable(State_t hpfe) {
   value &= 0xFB;
   value |= (hpfe<<LIS3DH_HPCLICK);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -685,7 +711,7 @@ status_t LIS3DH_HPFAOI1Enable(State_t hpfe) {
   value &= 0xFE;
   value |= (hpfe<<LIS3DH_HPIS1);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -708,7 +734,7 @@ status_t LIS3DH_HPFAOI2Enable(State_t hpfe) {
   value &= 0xFD;
   value |= (hpfe<<LIS3DH_HPIS2);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -732,7 +758,7 @@ status_t LIS3DH_SetHPFMode(LIS3DH_HPFMode_t hpm) {
   value &= 0x3F;
   value |= (hpm<<LIS3DH_HPM);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -758,7 +784,7 @@ status_t LIS3DH_SetHPFCutOFF(LIS3DH_HPFCutOffFreq_t hpf) {
   value &= 0xCF;
   value |= (hpf<<LIS3DH_HPCF);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -782,7 +808,7 @@ status_t LIS3DH_SetFilterDataSel(State_t state) {
   value &= 0xF7;
   value |= (state<<LIS3DH_FDS);
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG2, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -813,7 +839,7 @@ status_t LIS3DH_SetInt1Pin(LIS3DH_IntPinConf_t pinConf) {
   value &= 0x00;
   value |= pinConf;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG3, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG3, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -842,7 +868,7 @@ status_t LIS3DH_SetInt2Pin(LIS3DH_IntPinConf_t pinConf) {
   value &= 0x00;
   value |= pinConf;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG6, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG6, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -869,7 +895,7 @@ status_t LIS3DH_SetClickCFG(u8_t status) {
   value &= 0xC0;
   value |= status;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CLICK_CFG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CLICK_CFG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -888,7 +914,7 @@ status_t LIS3DH_SetClickTHS(u8_t ths) {
   if(ths>127)     
     return MEMS_ERROR;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CLICK_THS, ths) )
+  if( !LIS3DH_WriteReg(LIS3DH_CLICK_THS, &ths) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -907,7 +933,7 @@ status_t LIS3DH_SetClickLIMIT(u8_t t_limit) {
   if(t_limit>127)     
     return MEMS_ERROR;
   
-  if( !LIS3DH_WriteReg(LIS3DH_TIME_LIMIT, t_limit) )
+  if( !LIS3DH_WriteReg(LIS3DH_TIME_LIMIT, &t_limit) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -923,7 +949,7 @@ status_t LIS3DH_SetClickLIMIT(u8_t t_limit) {
 *******************************************************************************/
 status_t LIS3DH_SetClickLATENCY(u8_t t_latency) {
   
-  if( !LIS3DH_WriteReg(LIS3DH_TIME_LATENCY, t_latency) )
+  if( !LIS3DH_WriteReg(LIS3DH_TIME_LATENCY, &t_latency) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -939,7 +965,7 @@ status_t LIS3DH_SetClickLATENCY(u8_t t_latency) {
 *******************************************************************************/
 status_t LIS3DH_SetClickWINDOW(u8_t t_window) {
   
-  if( !LIS3DH_WriteReg(LIS3DH_TIME_WINDOW, t_window) )
+  if( !LIS3DH_WriteReg(LIS3DH_TIME_WINDOW, &t_window) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1047,7 +1073,7 @@ status_t LIS3DH_Int1LatchEnable(State_t latch) {
   value &= 0xF7;
   value |= latch<<LIS3DH_LIR_INT1;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1088,7 +1114,7 @@ status_t LIS3DH_SetIntConfiguration(LIS3DH_Int1Conf_t ic) {
   value &= 0x40; 
   value |= ic;
   
-  if( !LIS3DH_WriteReg(LIS3DH_INT1_CFG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_INT1_CFG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1112,7 +1138,7 @@ status_t LIS3DH_SetIntMode(LIS3DH_Int1Mode_t int_mode) {
   value &= 0x3F; 
   value |= (int_mode<<LIS3DH_INT_6D);
   
-  if( !LIS3DH_WriteReg(LIS3DH_INT1_CFG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_INT1_CFG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1156,9 +1182,9 @@ status_t LIS3DH_SetInt6D4DConfiguration(LIS3DH_INT_6D_4D_t ic) {
     value2 |= (MEMS_DISABLE<<LIS3DH_D4D_INT1);
   }
   
-  if( !LIS3DH_WriteReg(LIS3DH_INT1_CFG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_INT1_CFG, &value) )
     return MEMS_ERROR;
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value2) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value2) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1216,7 +1242,7 @@ status_t LIS3DH_SetInt1Threshold(u8_t ths) {
   if (ths > 127)
     return MEMS_ERROR;
   
-  if( !LIS3DH_WriteReg(LIS3DH_INT1_THS, ths) )
+  if( !LIS3DH_WriteReg(LIS3DH_INT1_THS, &ths) )
     return MEMS_ERROR;    
   
   return MEMS_SUCCESS;
@@ -1235,7 +1261,7 @@ status_t LIS3DH_SetInt1Duration(LIS3DH_Int1Conf_t id) {
   if (id > 127)
     return MEMS_ERROR;
   
-  if( !LIS3DH_WriteReg(LIS3DH_INT1_DURATION, id) )
+  if( !LIS3DH_WriteReg(LIS3DH_INT1_DURATION, &id) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1260,14 +1286,14 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0x1F;
     value |= (LIS3DH_FIFO_BYPASS_MODE<<LIS3DH_FM);                     
     
-    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )           //fifo mode bypass
+    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )           //fifo mode bypass
       return MEMS_ERROR;   
     if( !LIS3DH_ReadReg(LIS3DH_CTRL_REG5, &value) )
       return MEMS_ERROR;
     
     value &= 0xBF;    
     
-    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value) )               //fifo disable
+    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value) )               //fifo disable
       return MEMS_ERROR;   
   }
   
@@ -1278,7 +1304,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0xBF;
     value |= MEMS_SET<<LIS3DH_FIFO_EN;
     
-    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value) )               //fifo enable
+    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value) )               //fifo enable
       return MEMS_ERROR;  
     if( !LIS3DH_ReadReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
@@ -1286,7 +1312,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0x1f;
     value |= (fm<<LIS3DH_FM);                     //fifo mode configuration
     
-    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )
+    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
   }
   
@@ -1297,7 +1323,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0xBF;
     value |= MEMS_SET<<LIS3DH_FIFO_EN;
     
-    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value) )               //fifo enable
+    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value) )               //fifo enable
       return MEMS_ERROR;  
     if( !LIS3DH_ReadReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
@@ -1305,7 +1331,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0x1f;
     value |= (fm<<LIS3DH_FM);                      //fifo mode configuration
     
-    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )
+    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
   }
   
@@ -1316,7 +1342,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0xBF;
     value |= MEMS_SET<<LIS3DH_FIFO_EN;
     
-    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value) )               //fifo enable
+    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value) )               //fifo enable
       return MEMS_ERROR;   
     if( !LIS3DH_ReadReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
@@ -1324,7 +1350,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0x1f;
     value |= (fm<<LIS3DH_FM);                      //fifo mode configuration
     
-    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )
+    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
   }
   
@@ -1335,7 +1361,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0xBF;
     value |= MEMS_SET<<LIS3DH_FIFO_EN;
     
-    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, value) )               //fifo enable
+    if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG5, &value) )               //fifo enable
       return MEMS_ERROR;    
     if( !LIS3DH_ReadReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
@@ -1343,7 +1369,7 @@ status_t LIS3DH_FIFOModeEnable(LIS3DH_FifoMode_t fm) {
     value &= 0x1f;
     value |= (fm<<LIS3DH_FM);                      //fifo mode configuration
     
-    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )
+    if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )
       return MEMS_ERROR;
   }
   
@@ -1367,7 +1393,7 @@ status_t LIS3DH_SetTriggerInt(LIS3DH_TrigInt_t tr) {
   value &= 0xDF;
   value |= (tr<<LIS3DH_TR); 
   
-  if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1393,7 +1419,7 @@ status_t LIS3DH_SetWaterMark(u8_t wtm) {
   value &= 0xE0;
   value |= wtm; 
   
-  if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_FIFO_CTRL_REG, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;
@@ -1762,7 +1788,7 @@ status_t LIS3DH_SetSPIInterface(LIS3DH_SPIMode_t spi) {
   value &= 0xFE;
   value |= spi<<LIS3DH_SIM;
   
-  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, value) )
+  if( !LIS3DH_WriteReg(LIS3DH_CTRL_REG4, &value) )
     return MEMS_ERROR;
   
   return MEMS_SUCCESS;

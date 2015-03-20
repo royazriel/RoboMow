@@ -286,13 +286,13 @@ uint32 inittestapplication(void)
 #else
 	if(anchorAddressList[instance_anchaddr] & 0x1)
 	{
-		led_on(LED_PC6);
-		led_off(LED_PC8);
+		led_on(LED_PC8);
+		led_off(LED_PC9);
 	}
 	if(anchorAddressList[instance_anchaddr] & 0x2)
 	{
-		led_on(LED_PC6);
 		led_on(LED_PC8);
+		led_on(LED_PC9);
 	}
 #endif
 
@@ -459,13 +459,13 @@ int main(void)
 #else
 	if(anchorAddressList[instance_anchaddr] & 0x1)
 	{
-		led_on(LED_PC6);
-		led_off(LED_PC8);
+		led_on(LED_PC8);
+		led_off(LED_PC9);
 	}
 	if(anchorAddressList[instance_anchaddr] & 0x2)
 	{
-		led_on(LED_PC6);
 		led_on(LED_PC8);
+		led_on(LED_PC9);
 	}
 #endif
 
@@ -488,9 +488,19 @@ int main(void)
 
     port_EnableEXT_IRQ(); //enable ScenSor IRQ before starting
 
+	if( GPIO_ReadInputDataBit( ANCHOR_ID_SELECTION_PORT,ANCHOR_ID_SELECTION))
+	{
+		instance_anchaddr = 1;
+		if(instance_anchaddr==ANCHOR_LIST_SIZE) instance_anchaddr = 0;
+		restartinstance();
+	}
+	sprintf( dataseq, "ANCHOR ID IS %d", instance_anchaddr + 1);
+	printUSART(dataseq);
+
     // main loop
     while(1)
     {
+#if 0
     	if( GPIO_ReadInputDataBit( USER_BUTTON_PORT,USER_BUTTON))
     	{
     		instance_anchaddr++;
@@ -500,6 +510,7 @@ int main(void)
     		restartinstance();
     		sleep(1);
     	}
+#endif
         instance_run();
 
 		if( portGetTickCount() >  lastCommunication + COM_TIMEOUT_TO_RESET )

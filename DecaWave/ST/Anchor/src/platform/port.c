@@ -42,7 +42,7 @@ int portGetTickCnt(void)
 
 int SysTick_Configuration(void)
 {
-	if (SysTick_Config(SystemCoreClock / CLOCKS_PER_SEC))
+	if (SysTick_Config(SystemCoreClock/ 8 / CLOCKS_PER_SEC))
 	{
 		/* Capture error */
 		while (1);
@@ -320,6 +320,13 @@ int GPIO_Configuration(void)
 	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN ;
 	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_DOWN;
 	GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+	//Enable GPIO used for User button
+	GPIO_StructInit( &GPIO_InitStructure);
+	GPIO_InitStructure.GPIO_Pin = ANCHOR_ID_SELECTION;
+	GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN ;
+	GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+	GPIO_Init(ANCHOR_ID_SELECTION_PORT, &GPIO_InitStructure);
 
 
 	//Enable GPIO used for Leds switch setting
