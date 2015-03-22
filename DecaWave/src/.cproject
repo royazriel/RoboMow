@@ -31,6 +31,7 @@
 								</option>
 								<option id="gnu.c.compiler.option.preprocessor.def.symbols.1655485993" name="Defined symbols (-D)" superClass="gnu.c.compiler.option.preprocessor.def.symbols" useByScannerDiscovery="false" valueType="definedSymbols">
 									<listOptionValue builtIn="false" value="NO_DEBUG_MULTI"/>
+									<listOptionValue builtIn="false" value="DW_ISR_SUPPORT"/>
 								</option>
 								<option id="gnu.c.compiler.option.dialect.std.997681393" name="Language standard" superClass="gnu.c.compiler.option.dialect.std" useByScannerDiscovery="true" value="gnu.c.compiler.dialect.default" valueType="enumerated"/>
 								<inputType id="cdt.managedbuild.tool.gnu.c.compiler.input.1625277459" superClass="cdt.managedbuild.tool.gnu.c.compiler.input"/>

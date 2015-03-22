@@ -8,6 +8,8 @@
 
 #include "gpioDriver.h"
 
+int gDecawaveIrqFd;
+
 int GPIOExport(int pin) {
 
 #define BUFFER_MAX 3
@@ -126,3 +128,74 @@ int GPIOWrite(int pin, int value)
 	close(fd);
 	return(0);
 }
+
+int GPIOSetEdge(int pin, int irq_type)
+{
+	char path[VALUE_MAX];
+	int fd;
+	int retval;
+	char* edge_str;
+
+	snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/edge", pin);
+	fd = open(path, O_WRONLY);
+	if (-1 == fd)
+	{
+		fprintf(stderr, "Failed to open gpio edge for writing!\n");
+		return(-1);
+	}
+
+	switch(irq_type)
+	{
+		case GPIO_IRQ_EDGE_FALLING:
+			edge_str = "falling";
+			break;
+		case GPIO_IRQ_EDGE_RISING:
+			edge_str = "rising";
+			break;
+		case GPIO_IRQ_EDGE_BOTH:
+		default:
+			edge_str = "both";
+			break;
+	}
+
+	retval = write( fd, edge_str, strlen(edge_str));
+	if (retval < 0)
+	{
+		fprintf(stderr,"Error: write: %s\n", strerror(errno));
+		return 1;
+	}
+
+	close(fd);
+}
+
+int GPIOPoll(int pin, int openFile )
+{
+	char path[VALUE_MAX];
+	struct pollfd pfd;
+	int retval;
+
+	if( openFile == 1 )
+	{
+			snprintf(path, VALUE_MAX, "/sys/class/gpio/gpio%d/value", pin);
+			gDecawaveIrqFd = open(path, O_WRONLY);
+			if (-1 == gDecawaveIrqFd) {
+				fprintf(stderr, "Failed to open gpio value for writing!\n");
+				return(-1);
+			}
+			GPIOSetEdge( pin, GPIO_IRQ_EDGE_RISING);
+	}
+	else
+	{
+		pfd.fd = gDecawaveIrqFd;
+		pfd.events = POLLPRI | POLLERR;
+
+		retval = poll(&pfd, 1, -1);
+		if (retval < 0)
+		{
+			printf("Error: poll: %s\n", strerror(errno));
+			return 1;
+		}
+		//printf("got isr from decawave");
+	}
+}
+

@@ -1375,6 +1375,8 @@ int instance_init_s(int mode)
     // if using auto CRC check (DWT_INT_RFCG and DWT_INT_RFCE) are used instead of DWT_INT_RDFR flag
     // other errors which need to be checked (as they disable receiver) are
     //dwt_setinterrupt(DWT_INT_TFRS | DWT_INT_RFCG | (DWT_INT_SFDT | DWT_INT_RFTO /*| DWT_INT_RXPTO*/), 1);
+
+    PINFO("Setting INTERRUPT IN DECAWAVE\r\n");
     dwt_setinterrupt(DWT_INT_TFRS | DWT_INT_RFCG | (DWT_INT_ARFE | DWT_INT_RFSL | DWT_INT_SFDT | DWT_INT_RPHE | DWT_INT_RFCE | DWT_INT_RFTO /*| DWT_INT_RXPTO*/), 1);
 
     //this is platform dependent - only program if DW EVK/EVB

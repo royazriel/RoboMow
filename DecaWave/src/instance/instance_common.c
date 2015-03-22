@@ -14,6 +14,7 @@
 #include "deca_device_api.h"
 #include "spiDriver.h"
 #include "instance.h"
+#include "gpioDriver.h"
 
 
 //uint32 ptime = 0;
@@ -1206,6 +1207,14 @@ int instance_run(void)
 	if(getSpiHandle() > 0) //this is as Cheetah does not work with interrupts
 	{
 
+#ifdef DW_ISR_SUPPORT
+		GPIOPoll(DW_IRQ_PIN, 0);
+		if( dwt_checkIRQ())
+		{
+			dwt_isr();
+		}
+	}
+#else
 		while(dwt_checkIRQ()) // check if IRQS bit is active and process any new events
 		{
 #ifdef DEBUG_MULTI
@@ -1219,6 +1228,7 @@ int instance_run(void)
 	{
 		dwt_isr() ;
 	}
+#endif
 
     int message = instance_peekevent(); //get any of the received events from ISR
 

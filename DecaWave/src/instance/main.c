@@ -499,17 +499,15 @@ int main(int argc, char *argv[])
 	GPIODirection(DW_EXT_ON,OUT);
 	GPIOWrite( DW_EXT_ON, HIGH );
 
-	//GPIOExport(DW_WAKEUP_PIN);
-	//GPIODirection(DW_WAKEUP_PIN,OUT);
-	//GPIOWrite( DW_WAKEUP_PIN, LOW );
+#ifdef DW_ISR_SUPPORT
+	GPIOExport(DW_IRQ_PIN);
+	GPIODirection(DW_IRQ_PIN,IN);
+	GPIOPoll(DW_IRQ_PIN, 1);  //to open the value file
+#endif
 
 	usleep( 3000 ); //wait 3ms according to datasheet
 
 	GPIOWrite( DW_RESET_PIN, HIGH ); //take out of reset drive to low for reset
-
-	GPIOExport(DW_WAKEUP_PIN);
-	GPIODirection(DW_WAKEUP_PIN,OUT);
-	GPIOWrite( DW_WAKEUP_PIN, LOW );
 
 	s_spi.bits = 8;
 	s_spi.speed = 1500000;
@@ -579,8 +577,8 @@ int main(int argc, char *argv[])
 	            {
 	            	PINFO("**************************************************LAST: %4.2f m t:%u **************************************************", range_result,getmstime()-lastReportTime);
 	            }
-	            gpioVal ^= 1;
-	            GPIOWrite( DW_WAKEUP_PIN, gpioVal );
+//	            gpioVal ^= 1;
+//	            GPIOWrite( DW_WAKEUP_PIN, gpioVal );
 	            lastReportTime=getmstime();
 	            uint64 id = instance_get_anchaddr();
 	            (*(uint32*) buffer)= MAGIC_NUMBER;
