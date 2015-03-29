@@ -10,6 +10,7 @@
 
 int gDecawaveIrqFd;
 
+#if 0
 int GPIOExport(int pin) {
 
 #define BUFFER_MAX 3
@@ -57,7 +58,7 @@ int GPIOUnexport(int pin)
 	close(fd);
 	return (0);
 }
-
+#endif
 int GPIODirection(int pin, int dir)
 {
 	static const char s_directions_str[]  = "in\0out";

@@ -491,16 +491,16 @@ int main(int argc, char *argv[])
 
 	lastCommunication = getmstime();
 
-	GPIOExport(DW_RESET_PIN);
+	//GPIOExport(DW_RESET_PIN);
 	GPIODirection(DW_RESET_PIN,OUT);
 	GPIOWrite( DW_RESET_PIN, LOW );
 
-	GPIOExport(DW_EXT_ON);
+	//GPIOExport(DW_EXT_ON);
 	GPIODirection(DW_EXT_ON,OUT);
 	GPIOWrite( DW_EXT_ON, HIGH );
 
 #ifdef DW_ISR_SUPPORT
-	GPIOExport(DW_IRQ_PIN);
+	//GPIOExport(DW_IRQ_PIN);
 	GPIODirection(DW_IRQ_PIN,IN);
 	GPIOPoll(DW_IRQ_PIN, 1);  //to open the value file
 #endif
@@ -546,8 +546,30 @@ int main(int argc, char *argv[])
 		}
     	exit(1);
     }
+#ifdef INTEGRATION _TESTING
+	range_result = 1.00;
+#endif
     while( 1 )
     {
+
+#ifdef INTEGRATION _TESTING
+
+        (*(uint32*) buffer)= MAGIC_NUMBER;
+        (*(uint32*)(buffer + 4))= (uint32)1;
+        (*(float* )(buffer + 8)) = (float)range_result;
+        if( instance_mode == TAG )
+        {
+        	if(AfUnixClinetSendReportTOF(buffer, 12))
+        	{
+        		sleep(1);
+        		//socket probably disconnected
+        		AfUnixClinetConnect();
+        	}
+        }
+    	usleep(100000);
+    	range_result += 0.01;
+    	continue;
+#endif
 		if (initComplete)   // if application is not paused (and initialsiation completed)
 		{
 			instance_run();
