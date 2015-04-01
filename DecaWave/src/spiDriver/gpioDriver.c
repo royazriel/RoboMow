@@ -190,7 +190,7 @@ int GPIOPoll(int pin, int openFile )
 		pfd.fd = gDecawaveIrqFd;
 		pfd.events = POLLPRI | POLLERR;
 
-		retval = poll(&pfd, 1, -1);
+		retval = poll(&pfd, 1, 1000);
 		if (retval < 0)
 		{
 			printf("Error: poll: %s\n", strerror(errno));

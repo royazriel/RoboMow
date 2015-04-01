@@ -42,7 +42,7 @@ int portGetTickCnt(void)
 
 int SysTick_Configuration(void)
 {
-	if (SysTick_Config(SystemCoreClock / CLOCKS_PER_SEC))
+	if (SysTick_Config(SystemCoreClock/6 / CLOCKS_PER_SEC))
 	{
 		/* Capture error */
 		while (1);

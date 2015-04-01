@@ -414,7 +414,7 @@ int main(void)
 
     printUSART( "DECAWAVE");
     printUSART( SOFTWARE_VER_STRING );
-    Sleep(1);
+    Sleep(1000);
     /* Enable the peripheral clock of GPIOA */
      RCC->AHBENR |= RCC_AHBENR_GPIOAEN;
 #if 0
@@ -448,7 +448,7 @@ int main(void)
 		if (i & 1) led_off(LED_ALL);
 		else    led_on(LED_ALL);
 	
-		Sleep(20);
+		Sleep(200);
 	}
 	i = 0;
 	led_off(LED_ALL);

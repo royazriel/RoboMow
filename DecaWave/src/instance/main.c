@@ -612,6 +612,7 @@ int main(int argc, char *argv[])
 	            	//UdpClinetSendReportTOF(buffer, 8);
 	            	if(AfUnixClinetSendReportTOF(buffer, 12))
 	            	{
+	            		AfUnixClinetCloseSocket();
 	            		sleep(1);
 	            		//socket probably disconnected
 	            		AfUnixClinetConnect();
