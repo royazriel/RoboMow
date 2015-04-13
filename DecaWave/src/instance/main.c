@@ -40,7 +40,7 @@ uint64 lastCommunication = 0;
 uint32 txPower = 0x1f1f1f1f;
 uint64 burnAddress = 0;
 unsigned char* ipAddress;
-int port;
+int port = 0;
 int instance_mode = ANCHOR;
 int viewClockOffset = 0 ;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
@@ -257,25 +257,7 @@ uint32 inittestapplication()
 
 	if(instance_mode == LISTENER) instcleartaglist();
 
-#if (DR_DISCOVERY == 0)
-	if(instance_mode == TAG)
-	{
-		//if( UdpclinetConnect((const char *)ipAddress, port))
-		if( AfUnixClinetConnect())
-		{
-			PINFO("AfUnixClientConnect failed to init socket");
-		}
-	}
-#else
-	if(instance_mode == ANCHOR)
-	{
-		PINFO("connecting");
-		if( UdpclinetConnect((const char *)ipAddress, port))
-		{
-			PINFO("udp client failed to init socket");
-		}
-	}
-#endif
+
 
 	if( 0 /*responseDelay < FIXED_REPLY_DELAY*/ ) //if fast ranging then initialise instance for fast ranging application
 	{
@@ -312,7 +294,7 @@ uint32 inittestapplication()
 
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
-    instancesettagsleepdelay( 50, BLINK_SLEEP_DELAY); //set the Tag sleep time
+    instancesettagsleepdelay( 10, BLINK_SLEEP_DELAY); //set the Tag sleep time
 #else
     instancesettagsleepdelay( 0, BLINK_SLEEP_DELAY); //set the Tag sleep time
 #endif
@@ -549,6 +531,17 @@ int main(int argc, char *argv[])
 #ifdef INTEGRATION _TESTING
 	range_result = 1.00;
 #endif
+
+#if (DR_DISCOVERY == 0)
+	if(instance_mode == TAG)
+	{
+		if( AfUnixClinetConnect())
+		{
+			PINFO("AfUnixClientConnect failed to init socket");
+		}
+	}
+#endif
+
     while( 1 )
     {
 
@@ -580,6 +573,7 @@ int main(int argc, char *argv[])
 					PINFO("no Communication resetting");
 					restartinstance();
 					lastCommunication = getmstime();
+					ranging = 0;
 				}
 			}
 
@@ -609,13 +603,16 @@ int main(int argc, char *argv[])
 #if (DR_DISCOVERY == 0)
 	            if( instance_mode == TAG )
 	            {
-	            	//UdpClinetSendReportTOF(buffer, 8);
-	            	if(AfUnixClinetSendReportTOF(buffer, 12))
+	            	if( port != 0 )
 	            	{
-	            		AfUnixClinetCloseSocket();
-	            		sleep(1);
-	            		//socket probably disconnected
-	            		AfUnixClinetConnect();
+	            		//UdpClinetSendReportTOF(buffer, 8);
+	            		if(AfUnixClinetSendReportTOF(buffer, 12))
+	            		{
+	            			AfUnixClinetCloseSocket();
+	            			sleep(1);
+	            			//socket probably disconnected
+	            			AfUnixClinetConnect();
+	            		}
 	            	}
 	            }
 #else

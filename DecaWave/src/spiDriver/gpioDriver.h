@@ -18,6 +18,10 @@
 #include <poll.h>
 #include <errno.h>
 
+#include "deca_device_api.h"
+#include "compiler.h"
+#include "spiDriver.h"
+
 #define IN   0
 #define OUT  1
 
