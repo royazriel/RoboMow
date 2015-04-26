@@ -1203,18 +1203,11 @@ int instance_run(void)
     int instance = 0 ;
     int done = INST_NOT_DONE_YET;
 	dwt_deviceentcnts_t itemp = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
+#ifdef DW_ISR_SUPPORT
+	usleep(50);
+#else
 	if(getSpiHandle() > 0) //this is as Cheetah does not work with interrupts
 	{
-
-#ifdef DW_ISR_SUPPORT
-		GPIOPoll(DW_IRQ_PIN, 0);
-		if( dwt_checkIRQ())
-		{
-			dwt_isr();
-		}
-	}
-#else
 		while(dwt_checkIRQ()) // check if IRQS bit is active and process any new events
 		{
 #ifdef DEBUG_MULTI
@@ -1248,6 +1241,7 @@ int instance_run(void)
     {
         if(instance_data[instance].mode == TAG) //Tag (is either in RX or sleeping)
         {
+        	PINFO("TAG start rx timeout %u",getmstime()-startTime);
             instance_data[instance].instancetimer = getmstime() + instance_data[instance].tagSleepTime_ms; //set timeout time
             instance_data[instance].instancetimer_en = 1; //start timer
         }
@@ -1270,7 +1264,7 @@ int instance_run(void)
 			dw_event.rxLength = 0;
 			dw_event.type = DWT_SIG_RX_TIMEOUT;
 			dw_event.type2 = 0x80 | DWT_SIG_RX_TIMEOUT;
-			//printf("PC timeout DWT_SIG_RX_TIMEOUT\n");
+			PINFO("TAG timeout DWT_SIG_RX_TIMEOUT %u",getmstime()-startTime );
 			instance_putevent(dw_event);
         }
     }

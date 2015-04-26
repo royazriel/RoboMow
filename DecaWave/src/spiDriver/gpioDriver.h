@@ -31,7 +31,6 @@
 #define SYSFS_GPIO_DIR "/sys/class/gpio"
 
 #define DW_RESET_PIN 	142 	//RPI 23			//header pin 16
-#define DW_EXT_ON	 	141 	//RPI 24			//header pin 18
 #define DW_IRQ_PIN		140		//RPI 25			//header pin 22
 
 typedef enum
@@ -42,8 +41,8 @@ typedef enum
 }irq_on_edge_t;
 
 
-int GPIOExport(int pin);
-int GPIOUnexport(int pin);
+int GPIOexport(unsigned int gpio);
+int GPIOUnexport(unsigned int gpio);
 int GPIODirection(int pin, int dir);
 int GPIORead(int pin);
 int GPIOWrite(int pin, int value);

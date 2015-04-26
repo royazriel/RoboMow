@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
+#include <pthread.h>
 
 #include "deca_device_api.h"
 #include "compiler.h"
@@ -50,7 +51,7 @@ int initComplete = 0 ;                          // Wait for initialisation befor
 int paused = 0;
 int lastReportTime;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
-
+extern uint32 startTime;
 
 char reset_request;
 
@@ -197,7 +198,7 @@ void addressconfigure(void)
     ipc.anchorAddress = anchorAddressList[instance_anchaddr];
     ipc.anchorAddressList = anchorAddressList;
     ipc.anchorListSize = ANCHOR_LIST_SIZE ;
-    ipc.anchorPollMask = 0x3;              // anchor poll mask
+    ipc.anchorPollMask = 0x1;              // anchor poll mask
     ipc.sendReport = 1 ;  //1 => anchor sends TOF report to tag
     //ipc.sendReport = 2 ;  //2 => anchor sends TOF report to listener
     instancesetaddresses(&ipc);
@@ -294,7 +295,7 @@ uint32 inittestapplication()
 
 #if (DR_DISCOVERY == 0)
     addressconfigure() ;                            // set up initial payload configuration
-    instancesettagsleepdelay( 10, BLINK_SLEEP_DELAY); //set the Tag sleep time
+    instancesettagsleepdelay( 200, BLINK_SLEEP_DELAY); //set the Tag sleep time
 #else
     instancesettagsleepdelay( 0, BLINK_SLEEP_DELAY); //set the Tag sleep time
 #endif
@@ -462,6 +463,19 @@ void swap4Bytes( uint8* buf )
 	buf[2] = tmp;
 }
 
+#ifdef DW_ISR_SUPPORT
+void *DecawaveIrq( void *ptr )
+{
+	while(1)
+	{
+		GPIOPoll(DW_IRQ_PIN, 0);
+#ifdef DEBUG_MULTI
+		PINFO("dwt_isr received time %u",getmstime()-startTime);
+#endif
+	}
+}
+#endif
+
 int main(int argc, char *argv[])
 {
 	int toggle = 1;
@@ -470,19 +484,18 @@ int main(int argc, char *argv[])
 	double avg_result = 0;
 	unsigned char buffer[100];
 	int gpioVal = 1;
+	pthread_t irqThread;
+	int ret;
+
 
 	lastCommunication = getmstime();
 
-	//GPIOExport(DW_RESET_PIN);
+	GPIOExport(DW_RESET_PIN);
 	GPIODirection(DW_RESET_PIN,OUT);
 	GPIOWrite( DW_RESET_PIN, LOW );
 
-	//GPIOExport(DW_EXT_ON);
-	GPIODirection(DW_EXT_ON,OUT);
-	GPIOWrite( DW_EXT_ON, HIGH );
-
 #ifdef DW_ISR_SUPPORT
-	//GPIOExport(DW_IRQ_PIN);
+	GPIOExport(DW_IRQ_PIN);
 	GPIODirection(DW_IRQ_PIN,IN);
 	GPIOPoll(DW_IRQ_PIN, 1);  //to open the value file
 #endif
@@ -539,6 +552,16 @@ int main(int argc, char *argv[])
 		{
 			PINFO("AfUnixClientConnect failed to init socket");
 		}
+	}
+#endif
+
+#ifdef DW_ISR_SUPPORT
+	ret = pthread_create( &irqThread, NULL, DecawaveIrq, NULL);
+
+	if(ret)
+	{
+		PERROR("Error - pthread_create() return code: %d\n",ret);
+		exit(1);
 	}
 #endif
 
@@ -625,8 +648,8 @@ int main(int argc, char *argv[])
 #if (DR_DISCOVERY == 0)
 	            if(instance_mode == ANCHOR)
 	            	PINFO("AVG8: %4.2f m", avg_result);
-	            else
-	            	PINFO("%llx", instance_get_anchaddr());
+	            //else
+	            	//PINFO("%llx", instance_get_anchaddr());
 #else
 	            //PINFO("AVG8: %4.2f m", avg_result);
 #endif

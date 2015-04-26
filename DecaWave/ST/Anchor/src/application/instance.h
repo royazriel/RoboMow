@@ -143,7 +143,7 @@ extern "C" {
 #define BLINK_FRAME_CTRLP				(BLINK_FRAME_CONTROL_BYTES + BLINK_FRAME_SEQ_NUM_BYTES) //2
 #define BLINK_FRAME_CRTL_AND_ADDRESS    (BLINK_FRAME_SOURCE_ADDRESS + BLINK_FRAME_CTRLP) //10 bytes
 
-#define ANCHOR_LIST_SIZE			(2)
+#define ANCHOR_LIST_SIZE			(1)
 #define TAG_LIST_SIZE				(1)	//anchor will range with 1st Tag it gets blink from
 
 #define SEND_TOF_REPORT				(1)	//use this to set sendTOFR2Tag parameter if the anchor sends the report back to the tag
@@ -201,7 +201,7 @@ extern "C" {
 
 
 //response delay time (Tag or Anchor when sending Final/Response messages respectively)
-#define FIXED_REPLY_DELAY       			12
+#define FIXED_REPLY_DELAY       			10
 #define FIXED_LONG_BLINK_RESPONSE_DELAY       (5*FIXED_REPLY_DELAY) //NOTE: this should be a multiple of FIXED_LONG_REPLY_DELAY see DELAY_MULTIPLE below
 #define DELAY_MULTIPLE				(FIXED_LONG_BLINK_RESPONSE_DELAY/FIXED_LONG_REPLY_DELAY - 1)
 
@@ -227,9 +227,15 @@ typedef enum inst_states
 
     TA_SLEEP_DONE,              //9
     TA_TXBLINK_WAIT_SEND,       //10
-    TA_TXRANGINGINIT_WAIT_SEND  //11
+    TA_TXRANGINGINIT_WAIT_SEND,  //11
+	TA_PAUSED,
+	TA_LAST_STATE
 } INST_STATES;
 
+typedef struct _StateString {
+	int8 state;
+	uint8 name[30];
+}Code2String;
 
 // This file defines data and functions for access to Parameters in the Device
 //message structure for Poll, Response and Final message
@@ -407,6 +413,7 @@ typedef struct
     INST_STATES testAppState ;			//state machine - current state
     INST_STATES nextState ;				//state machine - next state
     INST_STATES previousState ;			//state machine - previous state
+    INST_STATES prevStateDebug;
     int done ;					//done with the current event/wait for next event to arrive
 
 	//configuration structures

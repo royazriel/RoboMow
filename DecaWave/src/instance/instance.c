@@ -155,7 +155,7 @@ int destaddress(instance_data_t *inst)
     }
 
     //if we got this far means that we are just about to poll the last anchor in the list
-    inst->instToSleep = 1; //we'll sleep after this poll
+    inst->instToSleep = 0; //we'll sleep after this poll
     inst->anchorListIndex = 0; //start from the first anchor in the list after sleep finishes
 
     return 0;
@@ -593,9 +593,9 @@ int testapprun_s(instance_data_t *inst, int message)
 				setupmacframedata(inst, TAG_POLL_MSG_LEN, FRAME_CRTL_AND_ADDRESS_S + FRAME_CRC, RTLS_DEMO_MSG_TAG_POLL, !ACK_REQUESTED);
 #endif
 				//set the delayed rx on time (the response message will be sent after this delay)
-				dwt_setrxaftertxdelay((uint32)inst->fixedReplyDelay_sy);  //units are 1.0256us - wait for wait4respTIM before RX on (delay RX)
-				dwt_setrxtimeout((uint16)inst->fwtoTime_sy);  //units are us - wait for 7ms after RX on (but as using delayed RX this timeout should happen at response time + 7ms)
-
+				//dwt_setrxaftertxdelay((uint32)inst->fixedReplyDelay_sy);  //units are 1.0256us - wait for wait4respTIM before RX on (delay RX)
+				//dwt_setrxtimeout((uint16)inst->fwtoTime_sy);  //units are us - wait for 7ms after RX on (but as using delayed RX this timeout should happen at response time + 7ms)
+				dwt_setrxtimeout(0);  //ROY change to make the poll periodical
 				dwt_writetxdata(inst->psduLength, (uint8 *)  &inst->msg, 0) ;	// write the frame data
 
 				//response is expected
@@ -608,6 +608,7 @@ int testapprun_s(instance_data_t *inst, int message)
 
                 inst->testAppState = TA_TX_WAIT_CONF ;                                               // wait confirmation
                 inst->previousState = TA_TXPOLL_WAIT_SEND ;
+                inst->lastPoll = getmstime(); //ROY change to make the poll periodical
                 inst->done = INST_DONE_WAIT_FOR_NEXT_EVENT; //will use RX FWTO to time out (set below)
 
             }
@@ -698,6 +699,8 @@ int testapprun_s(instance_data_t *inst, int message)
 
 				dwt_writetxdata(inst->psduLength, (uint8 *)  &inst->msg, 0) ;	// write the frame data
 
+				//PINFO("sending final message %u",getmstime()-startTime);
+
                 if(instancesendpacket(inst, DWT_START_TX_DELAYED))
                 {
                     // initiate the re-transmission
@@ -725,7 +728,7 @@ int testapprun_s(instance_data_t *inst, int message)
 					//RX will be turned on 80ms after final is sent, then use Sleep timer to timeout this is longer than needed but as DW1000 timeout is only 65ms long it is too short
 					//for the PC application, as the Anchor will send up to 2 reports (if it does not get the ACK) the first of which comes 90-105 ms after the Final TX, and the second
 					//will come about 150ms after the Final is sent. The Tag could use a different timer (shorter than the Sleep) to timeout sooner and go to Sleep
-                    inst->done = INST_DONE_WAIT_FOR_NEXT_EVENT_TO;
+                    inst->done = INST_DONE_WAIT_FOR_NEXT_EVENT; //ROY change to make the poll periodical
                 }
                 else //if Tag is not waiting for report - it will go to sleep automatically after the final is sent
                 {
@@ -833,7 +836,7 @@ int testapprun_s(instance_data_t *inst, int message)
                 }
                 else if (inst->gotTO) //timeout
                 {
-					//printf("got TO in TA_TX_WAIT_CONF\n");
+					PINFO("got TO in TA_TX_WAIT_CONF\n");
                     inst_processrxtimeout(inst);
                     inst->gotTO = 0;
 					inst->wait4ack = 0 ; //clear this
@@ -842,7 +845,6 @@ int testapprun_s(instance_data_t *inst, int message)
                 else
                 {
 					inst->txu.txTimeStamp = dw_event->timeStamp;
-
                     inst->testAppState = TA_RXE_WAIT ;                      // After sending, tag expects response/report, anchor waits to receive a final/new poll
                     //fall into the next case (turn on the RX)
 					message = 0;
@@ -1190,8 +1192,8 @@ int testapprun_s(instance_data_t *inst, int message)
 
 								//printf("ToFRx Timestamp: %4.15e\n", convertdevicetimetosecu(dw_event.timeStamp));
 
-                                    inst->testAppState = TA_TXE_WAIT;
-                                    inst->nextState = TA_TXPOLL_WAIT_SEND ; // send next poll
+                                    //inst->testAppState = TA_TXE_WAIT;
+                                    //inst->nextState = TA_TXPOLL_WAIT_SEND ; //ROY change to make the poll periodical
                             }
                             break; //RTLS_DEMO_MSG_ANCH_TOFR
 
@@ -1346,6 +1348,12 @@ int testapprun_s(instance_data_t *inst, int message)
                 //printf("\nERROR - invalid state %d - what is going on??\n", inst->testAppState) ;
             break;
     } // end switch on testAppState
+
+    if( getmstime()-inst->lastPoll > inst->pollInterval) //ROY change to make the poll periodical
+    {
+    	//PINFO("changing state to send poll %u",getmstime()-startTime );
+    	inst->testAppState = TA_TXPOLL_WAIT_SEND;
+    }
 #ifdef DEBUG_MULTI
     if( inst->testAppState != inst->prevStateDebug )
 	{
@@ -1390,7 +1398,7 @@ int instance_init_s(int mode)
     instance_data[instance].sendTOFR2Tag = 0;
 #endif
 
-    instance_data[instance].tag2rxReport = 0; //Tag is not expecting the report
+    instance_data[instance].tag2rxReport = 1; //Tag is not expecting the report
 
 
     instance_setapprun(testapprun_s);
@@ -1443,6 +1451,7 @@ void instancesetreplydelay(int delayms, int datalength) //delay in ms
 	int sfdlen = 0;
 	int x = 0;
 
+	instance_data[instance].pollInterval = delayms * 4; //ROY change to make the poll periodical
 	if(datalength == 0)
         {
 #if (USING_64BIT_ADDR == 1)

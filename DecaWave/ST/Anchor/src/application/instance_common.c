@@ -17,6 +17,8 @@
 
 #include "instance.h"
 
+uint8_t buf[255];
+extern uint32 startTime;
 
 // -------------------------------------------------------------------------------------------------------------------
 //      Data Definitions
@@ -878,10 +880,14 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_POLL)
 				{
 					lastCommunication = portGetTickCount();
+					//sprintf(buf,"GOT RTLS_DEMO_MSG_TAG_POLL from %llx %u",*(uint64*)&dw_event.msgu.frame[13],portGetTickCnt()-startTime);
+					//printUSART(buf);
+
 				}
 				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_FINAL)
 				{
-					//PINFO("GOT RTLS_DEMO_MSG_TAG_FINAL from %llx %u",*(uint64*)&dw_event.msgu.frame[13],getmstime()-startTime);
+					//sprintf(buf,"GOT RTLS_DEMO_MSG_TAG_FINAL from %llx %u",*(uint64*)&dw_event.msgu.frame[13],portGetTickCnt()-startTime);
+					//printUSART(buf);
 				}
 			}
 			if(instance_data[0].mode == TAG )
@@ -1220,7 +1226,8 @@ int instance_run(void)
 			dw_event.rxLength = 0;
 			dw_event.type = DWT_SIG_RX_TIMEOUT;
 			dw_event.type2 = 0x80 | DWT_SIG_RX_TIMEOUT;
-			//printf("PC timeout DWT_SIG_RX_TIMEOUT\n");
+			sprintf(buf,"ANCHOR timeout DWT_SIG_RX_TIMEOUT %u\n", portGetTickCnt()-startTime );
+			printUSART(buf);
 			instance_putevent(dw_event);
         }
     }

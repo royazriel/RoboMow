@@ -10,6 +10,9 @@
 
 int gDecawaveIrqFd;
 
+#define MAX_BUF 64
+#define SYSFS_GPIO_DIR "/sys/class/gpio"
+
 #if 0
 int GPIOExport(int pin) {
 
@@ -59,6 +62,45 @@ int GPIOUnexport(int pin)
 	return (0);
 }
 #endif
+
+int GPIOExport(unsigned int gpio)
+{
+	int fd, len;
+	char buf[MAX_BUF];
+
+	fd = open(SYSFS_GPIO_DIR "/export", O_WRONLY);
+	if (fd < 0) {
+		perror("gpio/export");
+		return fd;
+	}
+
+	len = snprintf(buf, sizeof(buf), "%d", gpio);
+	write(fd, buf, len);
+	close(fd);
+
+	return 0;
+}
+
+/****************************************************************
+ * gpio_unexport
+ ****************************************************************/
+int GPIOUnexport(unsigned int gpio)
+{
+	int fd, len;
+	char buf[MAX_BUF];
+
+	fd = open(SYSFS_GPIO_DIR "/unexport", O_WRONLY);
+	if (fd < 0) {
+		perror("gpio/export");
+		return fd;
+	}
+
+	len = snprintf(buf, sizeof(buf), "%d", gpio);
+	write(fd, buf, len);
+	close(fd);
+	return 0;
+}
+
 int GPIODirection(int pin, int dir)
 {
 	static const char s_directions_str[]  = "in\0out";
@@ -230,16 +272,17 @@ int GPIOPoll(int pin, int openFile )
 	}
 	else
 	{
-		GPIOReadByDescriptor(gDecawaveIrqFd);
 		pfd.fd = gDecawaveIrqFd;
 		pfd.events = POLLPRI | POLLERR;
-		retval = poll(&pfd, 1, 1);
+		retval = poll(&pfd, 1, -1);
 		if (retval < 0)
 		{
 			printf("Error: poll: %s\n", strerror(errno));
 			return 1;
 		}
 		GPIOReadByDescriptor(gDecawaveIrqFd);
+		dwt_isr();
+
 	}
 }
 

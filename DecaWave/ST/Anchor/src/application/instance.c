@@ -18,6 +18,7 @@
 
 #include "instance.h"
 
+char buf[255];
 // -------------------------------------------------------------------------------------------------------------------
 
 //application data message byte offsets
@@ -43,7 +44,57 @@
 // NOTE: the maximum RX timeout is ~ 65ms
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 
+// -------------------------------------------------------------------------------------------------------------------
+instance_data_t instance_data[NUM_INST] ;
+//extern uint32 portGetTickCnt();
+extern uint32 startTime;
+extern int responseDelay;
 
+Code2String statesTable[TA_LAST_STATE] =
+{
+	{	TA_INIT,                     "TA_INIT	                  " },
+	{	TA_TXE_WAIT,                 "TA_TXE_WAIT                 " },
+	{	TA_TXPOLL_WAIT_SEND,         "TA_TXPOLL_WAIT_SEND         " },
+	{	TA_TXFINAL_WAIT_SEND,        "TA_TXFINAL_WAIT_SEND        " },
+	{	TA_TXRESPONSE_WAIT_SEND,     "TA_TXRESPONSE_WAIT_SEND     " },
+	{	TA_TXREPORT_WAIT_SEND,       "TA_TXREPORT_WAIT_SEND       " },
+	{	TA_TX_WAIT_CONF,             "TA_TX_WAIT_CONF             " },
+	{	TA_RXE_WAIT,                 "TA_RXE_WAIT                 " },
+	{	TA_RX_WAIT_DATA,             "TA_RX_WAIT_DATA             " },
+	{	TA_SLEEP_DONE,               "TA_SLEEP_DONE               " },
+	{	TA_TXBLINK_WAIT_SEND,        "TA_TXBLINK_WAIT_SEND        " },
+	{	TA_TXRANGINGINIT_WAIT_SEND,  "TA_TXRANGINGINIT_WAIT_SEND  " },
+	{	TA_PAUSED,                   "TA_PAUSED                   " },
+	{	-1 ,		                 "TA_LAST_STATE               " }
+};
+
+Code2String functionTable[10] =
+{
+	{ RTLS_DEMO_MSG_RNG_INIT     , "RTLS_DEMO_MSG_RNG_INIT   "    },
+	{ RTLS_DEMO_MSG_TAG_POLL     , "RTLS_DEMO_MSG_TAG_POLL   "    },
+	{ RTLS_DEMO_MSG_ANCH_RESP    , "RTLS_DEMO_MSG_ANCH_RESP  "    },
+	{ RTLS_DEMO_MSG_TAG_FINAL    , "RTLS_DEMO_MSG_TAG_FINAL  "    },
+	{ RTLS_DEMO_MSG_ANCH_TOFR    , "RTLS_DEMO_MSG_ANCH_TOFR  "    },
+	{ RTLS_DEMO_MSG_TAG_POLLF    , "RTLS_DEMO_MSG_TAG_POLLF  "    },
+	{ RTLS_DEMO_MSG_ANCH_RESPF   , "RTLS_DEMO_MSG_ANCH_RESPF "    },
+	{ RTLS_DEMO_MSG_TAG_FINALF   , "RTLS_DEMO_MSG_TAG_FINALF "    },
+	{ RTLS_DEMO_MSG_ANCH_TOFRF   , "RTLS_DEMO_MSG_ANCH_TOFRF "    },
+	{ -1 , "" 													  }
+};
+
+uint8* GetCodeName( Code2String* table, uint8 code )
+{
+	int i=0;
+	while(table[i].state != -1)
+	{
+		if( code == table[i].state)
+		{
+			break;
+		}
+		i++;
+	}
+	return table[i].name;
+}
 // -------------------------------------------------------------------------------------------------------------------
 // Functions
 // -------------------------------------------------------------------------------------------------------------------
@@ -188,6 +239,15 @@ int instancesendpacket(instance_data_t *inst, int delayedTx)
 //
 int testapprun_s(instance_data_t *inst, int message)
 {
+#ifdef DEBUG_MULTI
+	if( message != 0)
+	{
+		sprintf(buf,"testAppState: %s message %d time %u",GetCodeName( statesTable,inst->testAppState), message, portGetTickCnt()-startTime );
+		printUSART(buf);
+	}
+	inst->prevStateDebug = inst->testAppState;
+#endif
+
     switch (inst->testAppState)
     {
 
@@ -713,7 +773,8 @@ int testapprun_s(instance_data_t *inst, int message)
 				dwt_setrxaftertxdelay(0);  //units are ~us - wait for wait4respTIM before RX on (delay RX)
 
 				//response is expected
-				inst->wait4ack = DWT_RESPONSE_EXPECTED;
+				//inst->wait4ack = DWT_RESPONSE_EXPECTED;    roy change
+				inst->wait4ack = DWT_START_TX_IMMEDIATE;
 				//anchor - we don't use timeout, if the ACK is missed we'll get a Poll or Blink
 				if(inst->wait4ack)
                     {
@@ -995,7 +1056,11 @@ int testapprun_s(instance_data_t *inst, int message)
 						//non - discovery mode - association is not used, process all messages
 						fcode = fn_code;
 #endif
-                        switch(fcode)
+#ifdef DEBUG_MULTI
+                        sprintf(buf,"DWT_SIG_RX_OKAY: fcode = %s",GetCodeName(functionTable,fcode));
+                        printUSART(buf);
+#endif
+						switch(fcode)
                         {
                             case RTLS_DEMO_MSG_RNG_INIT:
                             {
@@ -1287,7 +1352,13 @@ int testapprun_s(instance_data_t *inst, int message)
                 //printf("\nERROR - invalid state %d - what is going on??\n", inst->testAppState) ;
             break;
     } // end switch on testAppState
-
+#ifdef DEBUG_MULTI
+    if( inst->testAppState != inst->prevStateDebug )
+	{
+		sprintf(buf,"new state : %s time: %u",GetCodeName( statesTable,inst->testAppState), portGetTickCnt()-startTime );
+		printUSART(buf);
+	}
+#endif
     return inst->done;
 } // end testapprun()
 

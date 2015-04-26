@@ -27,7 +27,7 @@ extern void send_usbmessage(uint8*, int);
 
 #define SOFTWARE_VER_STRING    "Version 2.26    " //
 
-#define COM_TIMEOUT_TO_RESET 3000
+#define COM_TIMEOUT_TO_RESET 200
 
 
 int instance_anchaddr = 0; //0 = 0xDECA020000000001; 1 = 0xDECA020000000002; 2 = 0xDECA020000000003
@@ -189,7 +189,7 @@ void addressconfigure(void)
     ipc.anchorAddress = anchorAddressList[instance_anchaddr];
     ipc.anchorAddressList = anchorAddressList;
     ipc.anchorListSize = ANCHOR_LIST_SIZE ;
-    ipc.anchorPollMask = 0x3; //0x7;              // anchor poll mask
+    ipc.anchorPollMask = 0x1; //0x7;              // anchor poll mask
 
     ipc.sendReport = 1 ;  //1 => anchor sends TOF report to tag
     //ipc.sendReport = 2 ;  //2 => anchor sends TOF report to listener
@@ -403,7 +403,6 @@ int main(void)
     uint8 dataseq[40];
 	double range_result = 0;
 	double avg_result = 0;
-	uint8 dataseq1[40];
 	uint8 pb;
 
     peripherals_init();
@@ -528,19 +527,19 @@ int main(void)
 #if (DR_DISCOVERY == 0)
             if(instance_mode == ANCHOR)
 #endif
-                avg_result = instance_get_adist();
-            sprintf((char*)&dataseq[1], "LAST: %4.2f m", range_result);
+            avg_result = instance_get_adist();
+            sprintf((char*)&dataseq[0], "LAST: %4.2f m", range_result);
             printUSART(dataseq); //send some data
 
 #if (DR_DISCOVERY == 0)
             if(instance_mode == ANCHOR)
-                sprintf((char*)&dataseq1[1], "AVG8: %4.2f m", avg_result);
+                sprintf((char*)&dataseq[0], "AVG8: %4.2f m", avg_result);
             else
-                sprintf((char*)&dataseq1[0], "%llx", instance_get_anchaddr());
+                sprintf((char*)&dataseq[0], "%llx", instance_get_anchaddr());
 #else
-            sprintf((char*)&dataseq1[1], "AVG8: %4.2f m", avg_result);
+            sprintf((char*)&dataseq[0], "AVG8: %4.2f m", avg_result);
 #endif
-            printUSART(dataseq1); //send some data
+            printUSART(dataseq); //send some data
         }
 
         if(ranging == 0)

@@ -143,7 +143,7 @@ extern "C" {
 #define BLINK_FRAME_CTRLP				(BLINK_FRAME_CONTROL_BYTES + BLINK_FRAME_SEQ_NUM_BYTES) //2
 #define BLINK_FRAME_CRTL_AND_ADDRESS    (BLINK_FRAME_SOURCE_ADDRESS + BLINK_FRAME_CTRLP) //10 bytes
 
-#define ANCHOR_LIST_SIZE			(2)
+#define ANCHOR_LIST_SIZE			(1)
 #define TAG_LIST_SIZE				(1)	//anchor will range with 1st Tag it gets blink from
 
 #define SEND_TOF_REPORT				(1)	//use this to set sendTOFR2Tag parameter if the anchor sends the report back to the tag
@@ -415,6 +415,8 @@ typedef struct
     INST_STATES previousState ;			//state machine - previous state
     INST_STATES prevStateDebug;
     int done ;					//done with the current event/wait for next event to arrive
+    uint32_t lastPoll;			//ROY change to make the poll periodical
+    uint32_t pollInterval;		//ROY change to make the poll periodical
 
 	//configuration structures
 	dwt_config_t    configData ;	//DW1000 channel configuration
