@@ -13,4 +13,4 @@ fi
 if [ ! -d "$GPIO_DIR/gpio142" ]; then
 echo 142 > /sys/class/gpio/export
 fi
-./DecaWave -d /dev/spidev2.0 -r 1 -c 0 -p 40010 -i 192.168.1.11 -s 12 -t 3000
+/friendly/bin/DecaWave -d /dev/spidev2.0 -r 1 -c 0 -p 1 -s 20 -t 200

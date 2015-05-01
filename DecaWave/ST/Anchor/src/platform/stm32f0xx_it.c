@@ -108,14 +108,20 @@ void SysTick_Handler(void)
 
 void EXTI0_1_IRQHandler(void)
 {
-//	if(EXTI_GetITStatus(DECAIRQ_EXTI) != RESET)
-//	{
-//		printUSART("got it");
-//	    process_deca_irq();
-//	    led_on(LED_PC6);
-//	    /* Clear the EXTI line 0 pending bit */
-//	    EXTI_ClearITPendingBit(DECAIRQ_EXTI);
-//	}
+#ifdef TEST_WDT
+	  printUSART("got push button\r\n");
+	  Sleep(100);
+	  if (EXTI_GetITStatus(EXTI_Line0) != RESET)
+	  {
+	    /* Clear the user push-button EXTI Line Pending Bit */
+	    EXTI_ClearITPendingBit(EXTI_Line0);
+
+	    /* As the following address is invalid (not mapped), a Hardfault exception
+	       will be generated with an infinite loop and when the IWDG counter reaches 0
+	       the IWDG reset occurs */
+	    *(__IO uint32_t *) 0x00040001 = 0xFF;
+	  }
+#endif
 }
 
 void EXTI4_15_IRQHandler(void)

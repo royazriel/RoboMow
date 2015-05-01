@@ -1451,7 +1451,7 @@ void instancesetreplydelay(int delayms, int datalength) //delay in ms
 	int sfdlen = 0;
 	int x = 0;
 
-	instance_data[instance].pollInterval = delayms * 4; //ROY change to make the poll periodical
+	instance_data[instance].pollInterval = delayms * 5; //ROY change to make the poll periodical
 	if(datalength == 0)
         {
 #if (USING_64BIT_ADDR == 1)

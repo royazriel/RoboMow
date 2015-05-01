@@ -14,6 +14,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <linux/types.h>
+#include <sys/time.h>
 #include <pthread.h>
 
 #include "deca_device_api.h"
@@ -27,6 +28,10 @@
 #include "gpioDriver.h"
 
 #define SOFTWARE_VER_STRING    "Version 2.26    " //
+#define ROBOMOW_SW_VER_STRING  "1.0.0"
+
+
+//#define INTEGRATION_TESTING
 
 
 static SpiConfig s_spi;
@@ -52,6 +57,7 @@ int paused = 0;
 int lastReportTime;
 double antennaDelay  ;                          // This is system effect on RTD subtracted from local calculation.
 extern uint32 startTime;
+int aliveTest = 0;
 
 char reset_request;
 
@@ -370,17 +376,19 @@ uint32 getmstime()
 static void print_usage(const char *prog)
 {
         printf("Usage: %s [-drciptsab] [data,..]\n", prog);
-        puts("  -d --device     		device to use (default /dev/spidev1.1)\n"
-             "  -r --role       		0 = LISTENER 1 = TAG 2 = ANCHOR\n"
-             "  -c --channel    		channel selection 0-7 like on evkDW1000\n"
-			 "  -i --ipAddress  		udp server address\n"
-			 "  -p --port           	server listening port\n"
-			 "  -s --response_delay  	in milisec\n"
-        	 "  -b --burnOTPAddress  	8byte hex\n"
-        	 "  -x --txPower         	tx power\n"
-        	 "  -n --noPrint            no print of results to console"
-        	 "	-t --resetTimeout		in case no communication restart state machine in ms"
-
+        puts("  -d --device				device to use (default /dev/spidev1.1)\n"
+             "  -r --role				0 = LISTENER 1 = TAG 2 = ANCHOR\n"
+             "  -c --channel			channel selection 0-7 like on evkDW1000\n"
+			 "  -i --ipAddress			udp server address\n"
+			 "  -p --port				server listening port\n"
+        	 "  -a --anchorID			anchor id\n"
+			 "  -s --response_delay		in milisec\n"
+        	 "  -b --burnOTPAddress		8byte hex\n"
+        	 "  -x --txPower			tx power\n"
+        	 "  -n --noPrint			no print of results to console\n"
+        	 "  -t --resetTimeout		in case no communication restart state machine in ms\n"
+        	 "  -q --aliveTest			if decawave module returns id through spi exits with 0 otherwise 1\n"
+        	 "  -v --version			version num\n"
         );
         exit(1);
 }
@@ -400,11 +408,13 @@ static void parse_opts(int argc, char *argv[])
 						{ "txPower"		        , 1, 0, 'x' },
 						{ "noPrint"      		, 1, 0, 'n' },
 						{ "resetTimout"    		, 1, 0, 't' },
+						{ "aliveTest"    		, 0, 0, 'q' },
+						{ "version"    			, 0, 0, 'v' },
                         { NULL          		, 0, 0, 0   },
                 };
                 int c;
 
-                c = getopt_long(argc, argv, "d:r:c:i:p:a:s:b:x:n:t:", lopts, NULL);
+                c = getopt_long(argc, argv, "d:r:c:i:p:a:s:b:x:n:t:qv", lopts, NULL);
 
                 if (c == -1)
                        break;
@@ -445,6 +455,13 @@ static void parse_opts(int argc, char *argv[])
 							break;
 					case 't':
 							resetTimeout = (int)strtol(optarg, NULL, 0);
+							break;
+					case 'q':
+							aliveTest = 1;
+							break;
+					case 'v':
+							printf("%s\n",ROBOMOW_SW_VER_STRING);
+							exit(0);
 							break;
 					default:
 							print_usage(argv[0]);
@@ -524,8 +541,15 @@ int main(int argc, char *argv[])
     if(inittestapplication() == (uint32)-1)
 	{
 		PERROR("init failed");
-		return 0; //error
+		exit(1);
 	}
+
+    if(aliveTest)
+    {
+    	PINFO("init device success");
+    	exit (0);
+    }
+
     if( burnAddress > 0 )
     {
     	int ret = 1;
@@ -568,14 +592,17 @@ int main(int argc, char *argv[])
     while( 1 )
     {
 
-#ifdef INTEGRATION _TESTING
-
+#ifdef INTEGRATION_TESTING
+    	struct timeval time;
+    	gettimeofday(&time,NULL);
         (*(uint32*) buffer)= MAGIC_NUMBER;
-        (*(uint32*)(buffer + 4))= (uint32)1;
-        (*(float* )(buffer + 8)) = (float)range_result;
+        (*(uint32*)(buffer + 4))  = time.tv_sec;
+        (*(uint32*)(buffer + 8))  = time.tv_usec;
+        (*(uint32*)(buffer + 12)) = (uint32)1;
+        (*(float* )(buffer + 16)) = (float)range_result;
         if( instance_mode == TAG )
         {
-        	if(AfUnixClinetSendReportTOF(buffer, 12))
+        	if(AfUnixClinetSendReportTOF(buffer, 20))
         	{
         		sleep(1);
         		//socket probably disconnected

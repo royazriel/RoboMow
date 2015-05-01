@@ -2122,7 +2122,9 @@ void dwt_isr(void) // assume interrupt can supply context
     dw1000local.cdata.event = 0;
 
     status = dwt_read32bitreg(SYS_STATUS_ID) ;            // read status register low 32bit
-
+#ifdef DEBUG_MULTI
+    PINFO("status %x",status);
+#endif
     //NOTES:
     //1. TX Event - if DWT_INT_TFRS is enabled, then when the frame has completed transmission the interrupt will be triggered.
     //   The status register will have the TXFRS bit set. This function will clear the tx event and call the dwt_txcallback function.
@@ -2177,7 +2179,7 @@ void dwt_isr(void) // assume interrupt can supply context
     // 1st check for RX frame received or RX timeout and if so call the rx callback function
     //
     if(status & SYS_STATUS_RXFCG)
-		{
+	{
 		if(status & SYS_STATUS_LDEDONE)  // Receiver FCS Good
 			{ 
 			// bug 634 - overrun overwrites the frame info data... so both frames should be discarded
@@ -2205,7 +2207,6 @@ void dwt_isr(void) // assume interrupt can supply context
 					if(dw1000local.dwt_rxcallback != NULL)
 						dw1000local.dwt_rxcallback(&dw1000local.cdata);
 				}
-
 				return;
 		}
 		
@@ -2332,6 +2333,7 @@ void dwt_isr(void) // assume interrupt can supply context
         clear |= status & SYS_STATUS_RXRFTO ;
         dwt_write32bitreg(SYS_STATUS_ID,clear) ;         // write status register to clear event bits we have seen
         dw1000local.cdata.event = DWT_SIG_RX_TIMEOUT  ;
+        PINFO("rxtimeout");
         if(dw1000local.dwt_rxcallback != NULL)
             dw1000local.dwt_rxcallback(&dw1000local.cdata);
         dw1000local.wait4resp = 0;

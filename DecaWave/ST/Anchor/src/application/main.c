@@ -496,6 +496,8 @@ int main(void)
 	sprintf( dataseq, "ANCHOR ID IS %d", instance_anchaddr + 1);
 	printUSART(dataseq);
 
+	WDT_Configuration();
+
     // main loop
     while(1)
     {
@@ -511,6 +513,7 @@ int main(void)
     	}
 #endif
         instance_run();
+        IWDG_ReloadCounter();
 
 		if( portGetTickCount() >  lastCommunication + COM_TIMEOUT_TO_RESET )
 		{

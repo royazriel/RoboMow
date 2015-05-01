@@ -886,6 +886,7 @@ void instance_rxcallback(const dwt_callback_data_t *rxd)
 				}
 				if( dw_event.msgu.frame[1] == 0xCC && dw_event.msgu.rxmsg_ll.messageData[FCODE] == RTLS_DEMO_MSG_TAG_FINAL)
 				{
+					lastCommunication = portGetTickCount();
 					//sprintf(buf,"GOT RTLS_DEMO_MSG_TAG_FINAL from %llx %u",*(uint64*)&dw_event.msgu.frame[13],portGetTickCnt()-startTime);
 					//printUSART(buf);
 				}

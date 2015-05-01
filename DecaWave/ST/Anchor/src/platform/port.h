@@ -178,6 +178,7 @@ void led_off(led_t led);
 
 int peripherals_init(void);
 void spi_peripheral_init(void);
+void WDT_Configuration(void);
 
 void SPI_ChangeRate(uint16_t scalingfactor);
 void SPI_ConfigFastRate(uint16_t scalingfactor);

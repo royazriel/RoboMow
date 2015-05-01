@@ -12,7 +12,9 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
-
+#include <sys/time.h>
+#include <time.h>
+#include <unistd.h>
 /**************************************************************************/
 /* Constants used by this program                                         */
 /**************************************************************************/
@@ -23,6 +25,7 @@
 typedef struct __Ranges
 {
        int   magic_no;
+       struct timeval time;
        int   anchorId;
        float range;
 }__attribute__ ((__packed__)) Ranges;
@@ -38,7 +41,8 @@ void main()
 	int    rc, length;
 	Ranges result;
 	struct sockaddr_un serveraddr;
-
+    struct tm* ptm;
+    char timeString[40];
 	/***********************************************************************/
 	/* A do/while(FALSE) loop is used to make error cleanup easier.  The   */
 	/* close() of each of the socket descriptors is only done once at the  */
@@ -105,7 +109,7 @@ void main()
 	}
 	while(1) 
 	{
-		rc = recv(sd2, (uint8_t*)&result, 12, 0);
+		rc = recv(sd2, (uint8_t*)&result, 20, 0);
 		if (rc < 0)
 		{
 			perror("recv() failed");
@@ -123,7 +127,9 @@ void main()
 				id[1] = result.anchorId;
 				range[1] = result.range;
 			}
-			printf( "\033cid=%d range=%4.2f | id=%d range=%4.2f\n",id[0],range[0],id[1],range[1]);
+            ptm =localtime(&result.time.tv_sec);
+            strftime(timeString,sizeof(timeString),"%H:%M:%S",ptm); 
+			printf( "\033ctime: %s.%03d id=%d range=%4.2f | id=%d range=%4.2f\n",timeString,(int)(result.time.tv_usec/1000),id[0],range[0],id[1],range[1]);
 		}
 		else
 		{
