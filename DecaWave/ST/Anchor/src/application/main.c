@@ -405,6 +405,8 @@ int main(void)
 	double avg_result = 0;
 	uint8 pb;
 
+	static uint32 periodicLedTime;
+
     peripherals_init();
 
     spi_peripheral_init();
@@ -498,6 +500,7 @@ int main(void)
 
 	WDT_Configuration();
 
+	periodicLedTime = portGetTickCnt();
     // main loop
     while(1)
     {
@@ -514,6 +517,14 @@ int main(void)
 #endif
         instance_run();
         IWDG_ReloadCounter();
+        if( portGetTickCnt()- periodicLedTime > 1000)
+        {
+        	if(GPIO_ReadInputDataBit(GPIOC,GPIO_Pin_9))
+        		GPIO_ResetBits(GPIOC, GPIO_Pin_9);
+        	else
+        		GPIO_SetBits(GPIOC, GPIO_Pin_9);
+        	periodicLedTime = portGetTickCnt();
+        }
 
 		if( portGetTickCount() >  lastCommunication + COM_TIMEOUT_TO_RESET )
 		{
