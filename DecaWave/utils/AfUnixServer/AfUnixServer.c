@@ -9,12 +9,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <stdint.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/un.h>
 #include <sys/time.h>
 #include <time.h>
 #include <unistd.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <signal.h>
+
+
 /**************************************************************************/
 /* Constants used by this program                                         */
 /**************************************************************************/
@@ -30,6 +36,18 @@ typedef struct __Ranges
        float range;
 }__attribute__ ((__packed__)) Ranges;
 
+FILE * csv;
+
+void signal_callback_handler(int signum)
+{
+   printf("Caught signal %d\n",signum);
+   // Cleanup and close up stuff her
+   // Terminate program
+   close(csv);
+   exit(signum);
+}
+
+
 void main()
 {	    
 	int id[2];
@@ -41,8 +59,15 @@ void main()
 	int    rc, length;
 	Ranges result;
 	struct sockaddr_un serveraddr;
-    struct tm* ptm;
-    char timeString[40];
+    	struct tm* ptm;
+    	char timeString[40];
+	int fd_file;
+	/* Create output file descriptor */
+	
+  	csv = fopen("/home/root/decaRange.csv", "w");
+	// Register signal and signal handler
+	signal(SIGINT, signal_callback_handler);
+
 	/***********************************************************************/
 	/* A do/while(FALSE) loop is used to make error cleanup easier.  The   */
 	/* close() of each of the socket descriptors is only done once at the  */
@@ -127,9 +152,10 @@ void main()
 				id[1] = result.anchorId;
 				range[1] = result.range;
 			}
-            ptm =localtime(&result.time.tv_sec);
-            strftime(timeString,sizeof(timeString),"%H:%M:%S",ptm); 
+			ptm =localtime(&result.time.tv_sec);
+			strftime(timeString,sizeof(timeString),"%H:%M:%S",ptm); 
 			printf( "\033ctime: %s.%03d id=%d range=%4.2f | id=%d range=%4.2f\n",timeString,(int)(result.time.tv_usec/1000),id[0],range[0],id[1],range[1]);
+			fprintf( csv,"%s.%03d,%d,%4.2f\r\n",timeString,(int)(result.time.tv_usec/1000),id[0],range[0]);
 		}
 		else
 		{
