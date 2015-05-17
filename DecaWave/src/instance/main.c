@@ -28,7 +28,7 @@
 #include "gpioDriver.h"
 
 #define SOFTWARE_VER_STRING    "Version 2.26    " //
-#define ROBOMOW_SW_VER_STRING  "1.0.0"
+#define ROBOMOW_SW_VER_STRING  "1.1.0"
 
 
 //#define INTEGRATION_TESTING
@@ -647,16 +647,20 @@ int main(int argc, char *argv[])
 //	            GPIOWrite( DW_WAKEUP_PIN, gpioVal );
 	            lastReportTime=getmstime();
 	            uint64 id = instance_get_anchaddr();
-	            (*(uint32*) buffer)= MAGIC_NUMBER;
-	            (*(uint32*)(buffer + 4))= (uint32)id;
-	            (*(float* )(buffer + 8)) = (float)range_result;
+	            struct timeval time;
+	          	gettimeofday(&time,NULL);
+				(*(uint32*) buffer)= MAGIC_NUMBER;
+				(*(uint32*)(buffer + 4))  = time.tv_sec;
+				(*(uint32*)(buffer + 8))  = time.tv_usec;
+				(*(uint32*)(buffer + 12)) = (uint32)1;
+				(*(float* )(buffer + 16)) = (float)range_result;
 #if (DR_DISCOVERY == 0)
 	            if( instance_mode == TAG )
 	            {
 	            	if( port != 0 )
 	            	{
 	            		//UdpClinetSendReportTOF(buffer, 8);
-	            		if(AfUnixClinetSendReportTOF(buffer, 12))
+	            		if(AfUnixClinetSendReportTOF(buffer, 20))
 	            		{
 	            			AfUnixClinetCloseSocket();
 	            			sleep(1);
